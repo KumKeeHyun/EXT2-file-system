@@ -5,6 +5,8 @@
 #include "disk.h"
 #include "types.h"
 
+#define MAX_SECTOR_SIZE 512
+
 #define EXT2_NAME_LEN 11
 #define EXT2_N_BLOCKS 15
 #define	VOLUME_LABLE "EXT2 BY NC"
@@ -110,7 +112,7 @@ typedef struct {
 	UINT32 last_orphan;
 	BYTE hash_seed[16];
 	BYTE def_hash_version;
-	BYTE padding_2;
+	BYTE sector_per_block;              // padding_2 -> sector_per_block
 	UINT16 padding_3;
 	UINT32 default_mount_opt; 			//0x100
 	UINT32 first_meta_bg;
@@ -148,7 +150,7 @@ int meta_write(EXT2_FILESYSTEM * fs, SECTOR group, SECTOR block, BYTE* sector);
 int data_read(EXT2_FILESYSTEM *, SECTOR group, SECTOR block, BYTE* sector);
 int data_write(EXT2_FILESYSTEM * fs, SECTOR group, SECTOR block, BYTE* sector);
 
-int ext2_format(DISK_OPERATIONS* disk);
+int ext2_format(DISK_OPERATIONS* disk, UINT32 block_size);
 int ext2_create(EXT2_NODE* parent, char* entryName, EXT2_NODE* retEntry);
 int ext2_lookup(EXT2_NODE* parent, const char* entryName, EXT2_NODE* retEntry);
 

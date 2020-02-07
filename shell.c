@@ -401,10 +401,16 @@ int shell_cmd_ls( int argc, char* argv[] )
 int shell_cmd_format( int argc, char* argv[] )
 {
 	int		result;
-	char*	param = NULL;
+	//UINT32 block_size;
+	char *param = NULL;
 
-	if( argc >= 2 )
+	if( argc >= 2 ) {
 		param = argv[1];
+	}
+
+	// printf("block size(byte) : ");
+	// scanf("%ud", &block_size);
+		
 
 	result = g_fs.format( &g_disk, param );
 
@@ -433,8 +439,8 @@ int shell_cmd_df( int argc, char* argv[] )
 	g_fsOprs.stat( &g_disk, &g_fsOprs, &total, &used );
 
 	printf( "free sectors : %u(%.2lf%%)\tused sectors : %u(%.2lf%%)\ttotal : %u\n",
-			total - used, get_percentage( total - used, g_disk.numberOfSectors ),
-		   	used, get_percentage( used, g_disk.numberOfSectors ),
+			total - used, get_percentage( total - used, g_disk.number_of_sectors ),
+		   	used, get_percentage( used, g_disk.number_of_sectors ),
 		   	total );
 
 	return 0;

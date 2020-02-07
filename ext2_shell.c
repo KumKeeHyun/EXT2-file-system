@@ -12,8 +12,8 @@ int fs_dumpDataSector(DISK_OPERATIONS* disk, int usedSector)
 	char * start;
 	char * end;
 
-	start = ((DISK_MEMORY *)disk->pdata)->address + usedSector * disk->bytesPerSector;
-	end = start + disk->bytesPerSector;
+	start = ((DISK_MEMORY *)disk->pdata)->address + usedSector * disk->bytes_per_sector;
+	end = start + disk->bytes_per_sector;
 	printFromP2P(start, end);
 	printf("\n\n");
 
@@ -55,8 +55,8 @@ void fs_dumpDataPart(DISK_OPERATIONS * disk, SHELL_FS_OPERATIONS * fsOprs, const
 
 	get_inode(EXT2Entry.fs, EXT2Entry.entry.inode, &node);
 
-	start = ((DISK_MEMORY *)disk->pdata)->address + (1 + node.i_block[0]) * disk->bytesPerSector;
-	end = start + disk->bytesPerSector;
+	start = ((DISK_MEMORY *)disk->pdata)->address + (1 + node.i_block[0]) * disk->bytes_per_sector;
+	end = start + disk->bytes_per_sector;
 	printFromP2P(start, end);
 }
 void fs_dumpfileinode(DISK_OPERATIONS * disk, SHELL_FS_OPERATIONS * fsOprs, const SHELL_ENTRY * parent, SHELL_ENTRY * entry, const char * name)
@@ -83,8 +83,8 @@ void fs_dumpDataBlockByNum(DISK_OPERATIONS * disk, SHELL_FS_OPERATIONS * fsOprs,
 {
 	char * start, *end;
 
-	start = ((DISK_MEMORY *)disk->pdata)->address + (1 + num) * disk->bytesPerSector;
-	end = start + disk->bytesPerSector;
+	start = ((DISK_MEMORY *)disk->pdata)->address + (1 + num) * disk->bytes_per_sector;
+	end = start + disk->bytes_per_sector;
 	printFromP2P(start, end);
 
 }
@@ -120,8 +120,15 @@ void printf_by_sel(DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, const SHE
 }
 int fs_format(DISK_OPERATIONS* disk, void* param)
 {
+	UINT32 block_size;
 	printf("formatting as a %s\n", (char *)param);
-	ext2_format(disk);
+
+	printf("block size");// 0: 1KB, 1 : 2KB, 2: 4KB 이외에는 오류
+	scanf("%u", &block_size);
+
+	// 정수 입력 오류 처리
+
+	ext2_format(disk, block_size);
 
 	return  1;
 }
@@ -164,7 +171,7 @@ int fs_mount(DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, SHELL_ENTRY* ro
 	{
 		printf("number of groups         : %d\n", NUMBER_OF_GROUPS);
 		printf("blocks per group         : %d\n", fs->sb.block_per_group);
-		printf("bytes per block          : %d\n", disk->bytesPerSector);
+		printf("bytes per block          : %d\n", disk->bytes_per_sector);
 		printf("free block count	 : %d\n", fs->sb.free_block_count);
 		printf("free inode count	 : %d\n", fs->sb.free_inode_count);
 		printf("first non reserved inode : %d\n", fs->sb.first_non_reserved_inode);
