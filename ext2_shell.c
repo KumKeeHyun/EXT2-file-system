@@ -123,10 +123,15 @@ int fs_format(DISK_OPERATIONS* disk, void* param)
 	UINT32 block_size;
 	printf("formatting as a %s\n", (char *)param);
 
-	printf("block size");// 0: 1KB, 1 : 2KB, 2: 4KB 이외에는 오류
+	// 0: 1KB, 1 : 2KB, 2: 4KB 이외에는 오류
+	printf("block size (0 - 1KB, 1 - 2KB, 2 - 4KB) : ");
 	scanf("%u", &block_size);
 
 	// 정수 입력 오류 처리
+	if (block_size < 0 || 2 < block_size)
+	{
+		
+	}
 
 	ext2_format(disk, block_size);
 
