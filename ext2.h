@@ -6,6 +6,8 @@
 #include "types.h"
 
 #define EXT2_NAME_LEN 11
+#define EXT2_N_BLOCKS 15
+#define	VOLUME_LABLE "EXT2 BY NC"
 
 #define EXT2_BAD_INO 1
 #define EXT2_ROOT_INO 2
@@ -21,6 +23,12 @@
 #define EXT2_FT_FIFO 5
 #define EXT2_FT_SOCK 6
 #define EXT2_FT_SYMLINK 7
+
+#define FILE_TYPE_FIFO               0x1000
+#define FILE_TYPE_CHARACTERDEVICE    0x2000
+#define FILE_TYPE_DIR				 0x4000
+#define FILE_TYPE_BLOCKDEVICE        0x6000
+#define FILE_TYPE_FILE				 0x8000
 
 typedef struct {
     UINT16 mode;
@@ -121,11 +129,11 @@ typedef struct {
     UINT16 directories_count; // Block Group 내에 생설된 디레곹리 수
     BYTE padding[2];
     BYTE reserved[12];
-} EXT2_GRUOP_DESCRIPTOR;
+} EXT2_GROUP_DESCRIPTOR;
 
 typedef struct {
     EXT2_SUPER_BLOCK sb;
-    EXT2_GRUOP_DESCRIPTOR gd;
+    EXT2_GROUP_DESCRIPTOR gd;
     DISK_OPERATIONS *disk;
 } EXT2_FILESYSTEM;
 
@@ -134,5 +142,21 @@ typedef struct {
     EXT2_DIR_ENTRY entry;
     EXT2_DIR_ENTRY_LOCATION location;
 } EXT2_NODE;
+
+int meta_read(EXT2_FILESYSTEM *, SECTOR group,SECTOR block, BYTE* sector);
+int meta_write(EXT2_FILESYSTEM * fs, SECTOR group, SECTOR block, BYTE* sector);
+int data_read(EXT2_FILESYSTEM *, SECTOR group, SECTOR block, BYTE* sector);
+int data_write(EXT2_FILESYSTEM * fs, SECTOR group, SECTOR block, BYTE* sector);
+
+int ext2_format(DISK_OPERATIONS* disk);
+int ext2_create(EXT2_NODE* parent, char* entryName, EXT2_NODE* retEntry);
+int ext2_lookup(EXT2_NODE* parent, const char* entryName, EXT2_NODE* retEntry);
+
+UINT32 expand_block(EXT2_FILESYSTEM * , UINT32 );
+int fill_super_block(EXT2_SUPER_BLOCK * sb, SECTOR numberOfSectors, UINT32 bytesPerSector);
+int fill_descriptor_block(EXT2_GROUP_DESCRIPTOR * gd, EXT2_SUPER_BLOCK * sb, SECTOR numberOfSectors, UINT32 bytesPerSector);
+int create_root(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK * sb);
+typedef int(*EXT2_NODE_ADD)(EXT2_FILESYSTEM*,void*, EXT2_NODE*);
+void process_meta_data_for_block_used(EXT2_FILESYSTEM * fs, UINT32 inode_num);
 
 #endif // _EXT2_H_
