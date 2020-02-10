@@ -246,6 +246,13 @@ int fill_descriptor_block(EXT2_GROUP_DESCRIPTOR * gd, EXT2_SUPER_BLOCK * sb, SEC
 
 int create_root(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK * sb)
 {
+	const BYTE sector_per_block = sb->sector_per_block;
+	BYTE block[MAX_SECTOR_SIZE * sector_per_block];
+
+	
+
+	ZeroMemory(block, sizeof(block));
+	//read_disk_per_block
 	
 	return EXT2_SUCCESS;
 }
@@ -286,14 +293,16 @@ int meta_write(EXT2_FILESYSTEM * fs, SECTOR group, SECTOR block, BYTE* sector)
 }
 
 // ------------------------------------------------------
+
 int read_disk_per_block(EXT2_FILESYSTEM *fs, SECTOR group, SECTOR block, BYTE *block_buf) 
 {
-    const SECTOR BOOT_BLOCK = 1;
+    const SECTOR BOOT_BLOCK = 2;
     DISK_OPERATIONS* disk = fs->disk;
-    SECTOR real_block_index = BOOT_BLOCK + group * fs->sb.block_per_group + block;
-    SECTOR real_sector_index = real_block_index * fs->sb.sector_per_block;
+	SECTOR sector_per_block = fs->sb.sector_per_block;
+    SECTOR real_block_index = group * fs->sb.block_per_group + block;
+    SECTOR real_sector_index = BOOT_BLOCK + real_block_index * sector_per_block;
 
-    for (SECTOR i = 0; i < 4; i++) {
+    for (SECTOR i = 0; i < sector_per_block; i++) {
         disk->read_sector(fs->disk, real_sector_index + i, &block_buf[i * disk->bytes_per_sector]);
     }
     return 0;
@@ -301,15 +310,58 @@ int read_disk_per_block(EXT2_FILESYSTEM *fs, SECTOR group, SECTOR block, BYTE *b
 
 int write_disk_per_block(EXT2_FILESYSTEM *fs, SECTOR group, SECTOR block, BYTE *block_buf) 
 {
-    const SECTOR BOOT_BLOCK = 1;
+    const SECTOR BOOT_BLOCK = 2;
     DISK_OPERATIONS* disk = fs->disk;
-    SECTOR real_block_index = BOOT_BLOCK + group * fs->sb.block_per_group + block;
-    SECTOR real_sector_index = real_block_index * fs->sb.sector_per_block;
+	SECTOR sector_per_block = fs->sb.sector_per_block;
+    SECTOR real_block_index = group * fs->sb.block_per_group + block;
+    SECTOR real_sector_index = BOOT_BLOCK + real_block_index * sector_per_block;
 
-    for (SECTOR i = 0; i < 4; i++) {
+    for (SECTOR i = 0; i < sector_per_block; i++) {
         disk->write_sector(fs->disk, real_sector_index + i, &block_buf[i * disk->bytes_per_sector]);
     }
     return 0;
+}
+
+int get_inode_location(EXT2_FILESYSTEM *fs, UINT32 inode_num, EXT2_ENTRY_LOCATION *loc) {
+	if (inode_num < 1) 
+		return -1;
+	UINT32 inode_per_group = fs->sb.inode_per_group;
+	UINT32 table_index = (inode_num - 1) % inode_per_group;
+	UINT32 inode_per_block = (1024 << fs->sb.log_block_size) / 128;
+
+	loc->group = inode_num / inode_per_group;
+	loc->block = (table_index / inode_per_block) + fs->gd.start_block_of_inode_table - 1;
+	loc->offset = table_index % inode_per_block;
+
+	return 0;
+}
+
+int get_inode(EXT2_FILESYSTEM* fs, const UINT32 inode_num, INODE *inodeBuffer) {
+	if (inode_num < 1)
+		return -1;
+
+	const BYTE sector_per_block = fs->sb.sector_per_block;
+	BYTE block[MAX_SECTOR_SIZE * sector_per_block];
+	EXT2_ENTRY_LOCATION loc;
+
+	get_inode_location(fs, inode_num, &loc);
+	read_disk_per_block(fs, loc.group, loc.block, block);
+
+	*inodeBuffer = ((INODE *)block)[loc.offset];
+
+	return 0;
+}
+
+int get_block_location(EXT2_FILESYSTEM *fs, UINT32 block_num, EXT2_ENTRY_LOCATION *loc) {
+	if (block_num < 1) 
+		return -1;
+	UINT32 block_per_group = fs->sb.block_per_group;
+
+	loc->group = block_num / block_per_group;
+	loc->block = block_num % block_per_group;
+	loc->offset = 0
+
+	return 0;
 }
 
 // ------------------------------------------------------
@@ -411,10 +463,6 @@ int find_entry_on_root(EXT2_FILESYSTEM* fs, INODE inode, char* formattedName, EX
 }
 
 int find_entry_on_data(EXT2_FILESYSTEM* fs, INODE first, const BYTE* formattedName, EXT2_NODE* ret)
-{
-}
-
-int get_inode(EXT2_FILESYSTEM* fs, const UINT32 inode, INODE *inodeBuffer)
 {
 }
 
