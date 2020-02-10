@@ -132,7 +132,7 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 	PRINTF("sector byte size               : %u\n", MAX_SECTOR_SIZE);
 	PRINTF("\n");
 
-	create_root(disk, &sb);
+	create_root(disk, &sb, &gd);
 
 	return EXT2_SUCCESS;
 }
@@ -244,12 +244,12 @@ int fill_descriptor_block(EXT2_GROUP_DESCRIPTOR * gd, EXT2_SUPER_BLOCK * sb, SEC
 	return EXT2_SUCCESS;
 }
 
-int create_root(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK * sb)
+int create_root(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK * sb, EXT2_GROUP_DESCRIPTOR *gd)
 {
 	const BYTE sector_per_block = sb->sector_per_block;
 	BYTE block[MAX_SECTOR_SIZE * sector_per_block];
 
-	
+	UINT32 first_data_block =
 
 	ZeroMemory(block, sizeof(block));
 	//read_disk_per_block
@@ -359,7 +359,7 @@ int get_block_location(EXT2_FILESYSTEM *fs, UINT32 block_num, EXT2_ENTRY_LOCATIO
 
 	loc->group = block_num / block_per_group;
 	loc->block = block_num % block_per_group;
-	loc->offset = 0
+	loc->offset = 0;
 
 	return 0;
 }
@@ -500,7 +500,7 @@ int set_inode_onto_inode_table(EXT2_FILESYSTEM *fs, const UINT32 which_inode_num
 int ext2_lookup(EXT2_NODE* parent, const char* entryName, EXT2_NODE* retEntry)
 {
 	
-	return 
+	return 0;
 }
 
 int ext2_read_dir(EXT2_NODE* dir, EXT2_NODE_ADD adder, void* list)
