@@ -21,39 +21,40 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 	EXT2_GROUP_DESCRIPTOR  gd_another_group;
 	
     // super block setting 전에는 한 block을 1KB로 인지
-    const UINT32 format_sector_per_block = 2;
+    // const UINT32 format_sector_per_block = 2;
 	
 	int i, gi, j;
 	const int BOOT_SECTOR_BASE = 1;
-	char block[MAX_SECTOR_SIZE * format_sector_per_block];
+	// char block_format[MAX_SECTOR_SIZE * format_sector_per_block];
 
 	// super block 채우기
 	if (fill_super_block(&sb, disk->number_of_sectors, disk->bytes_per_sector, log_block_size) != EXT2_SUCCESS)
 		return EXT2_ERROR;
-
+	/*
 	UINT32 byte_per_block = 1024 << log_block_size;
     UINT32 block_per_group = byte_per_block << 3;
     const BYTE sector_per_block = byte_per_block / disk->bytes_per_sector;
     UINT32 number_of_group = disk->number_of_sectors / (sector_per_block * block_per_group);
+	*/
 
-	char block[MAX_SECTOR_SIZE * sector_per_block];
+	char block[MAX_SECTOR_SIZE * sb.sector_per_block];
 
-	QWORD sector_num_per_group = block_per_group * sector_per_block;
+	QWORD sector_num_per_group = sb.block_per_group * sb.sector_per_block;
 
+	// disk에 super block write
 	ZeroMemory(block, sizeof(block));
 	memcpy(block, &sb, sizeof(sb));
-
-    SECTOR sector_index = BOOT_SECTOR_BASE * format_sector_per_block;
-    for (int i = 0; i < format_sector_per_block; i++) {
+    SECTOR sector_index = BOOT_SECTOR_BASE * sb.sector_per_block;
+    for (int i = 0; i < sb.sector_per_block; i++) 
+	{
         disk->write_sector(disk, sector_index + i, &block[i * disk->bytes_per_sector]);
     }
     // 끝
-    
 
+	// descriptor block 채우기 
 	if (fill_descriptor_block(&gd, &sb, disk->number_of_sectors, disk->bytes_per_sector) != EXT2_SUCCESS)
 		return EXT2_ERROR;
 
-	
     // descriptor block을 그룹 개수만큼 만들어서 써야함
     // superblock 다음위치
 	// descriptor block을 disk에 쓰기 
@@ -71,7 +72,7 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
         disk->write_sector(disk, sector_index + i, &block[i * disk->bytes_per_sector]);
     }
 	// inode bitmap 채우기
-	ZeroMemory(sector, sizeof(sector));
+	ZeroMemory(block, sizeof(block));
 
 	sector[0] = 0xff; // 8개
 	sector[1] = 0x03; // 2개  inode 예약 영역 10개 잡아줌
@@ -153,29 +154,30 @@ int fill_super_block(EXT2_SUPER_BLOCK * sb, SECTOR numberOfSectors, UINT32 bytes
 	// super block 초기화 당시 free block, inode 개수 = 최대 block, inode 개수
 	sb->free_block_count = sb->block_count;
     sb->free_inode_count = sb->max_inode_count;
-	// 첫 번째 블록 (모르겠음)
+	// 첫 번째 블록
     sb->first_data_block = 0x00; 
     sb->log_block_size = log_block_size; // 0, 1, 2
-	// 못구하겠음
-    sb->log_fragmentation_size;	
+
+    sb->log_fragmentation_size = 2;	// 0, 1, 2 (2 - 임시)
 
     sb->block_per_group = block_per_group;
-	// 못구하겠음
+
     sb->fragmentation_per_group;
 
-    sb->inode_per_group = sb->inode_per_group / number_of_group;
+    sb->inode_per_group = sb->max_inode_count / number_of_group;
 
-	// 못구하겠음
+	// 0
 	sb->mtime;
 	sb->wtime;
+
 	sb->mount_cnt = 0;
-	sb->max_mount_cnt;
+	sb->max_mount_cnt = 0xFFFF;
 
     sb->magic_signature = 0xEF53;
     sb->state = 1;
     sb->errors = 0;
 
-	// 못구하겠음
+	// 0
 	sb->minor_version;
 	sb->last_check;
 
@@ -183,19 +185,22 @@ int fill_super_block(EXT2_SUPER_BLOCK * sb, SECTOR numberOfSectors, UINT32 bytes
 	sb->creator_OS = 0; // linux
 	sb->major_version = 0; // inode 크기 고정
 
-	// 못구하겠음
+	// 0
 	sb->def_res_uid; 
 	sb->def_res_gid;
 
-	sb->first_ino = 11; 
+	sb->first_non_reserved_inoded = 11; 
 	sb->inode_size = 128;
 
-	// 못구하겠음
+	// 0
 	sb->block_group_num;
 
-	sb->feature_compat = 0x24; // 책에 있는 것 그대로
-	sb->feature_incompat;
-	sb->feature_read_only_compat;
+	// 책에 있는 것 그대로
+	sb->feature_compat = 0x24; 
+	sb->feature_incompat = 0x02 ; 
+	sb->feature_read_only_compat = 0x01;
+
+	// 0
 	sb->uuid[16];
 	sb->volume_name[16];
 	sb->last_mounted[64];
@@ -203,13 +208,16 @@ int fill_super_block(EXT2_SUPER_BLOCK * sb, SECTOR numberOfSectors, UINT32 bytes
 	sb->prealloc_block;
 	sb->prealloc_dir_block;
 	sb->padding_1;
-	sb->journal_uuid[16];			
+	sb->journal_uuid[16];	
 	sb->journal_inode_num;
 	sb->journal_dev;
 	sb->last_orphan;
 	sb->hash_seed[16];
 	sb->def_hash_version;
-	sb->sector_per_block = sector_per_block;            
+
+	sb->sector_per_block = sector_per_block; 
+
+	// 0
 	sb->padding_3;
 	sb->default_mount_opt; 		
 	sb->first_meta_bg;
@@ -220,6 +228,18 @@ int fill_super_block(EXT2_SUPER_BLOCK * sb, SECTOR numberOfSectors, UINT32 bytes
 int fill_descriptor_block(EXT2_GROUP_DESCRIPTOR * gd, EXT2_SUPER_BLOCK * sb, SECTOR numberOfSectors, UINT32 bytesPerSector)
 {
 	ZeroMemory(gd, sizeof(EXT2_GROUP_DESCRIPTOR));
+	UINT32 number_of_group = numberOfSectors / (sb->sector_per_block * sb->block_per_group);
+	
+	gd->start_block_of_block_bitmap = ; 
+    gd->start_block_of_inode_bitmap = ;
+    gd->start_block_of_inode_table = ;
+    gd->free_blocks_count = sb->block_per_group;
+    gd->free_inodes_count = sb->inode_per_group;
+    gd->directories_count = 0; // Block Group 내에 생성된 디렉토리 수
+    
+	// 0
+	gd->padding[2];
+    gd->reserved[12];
 
 	return EXT2_SUCCESS;
 }
