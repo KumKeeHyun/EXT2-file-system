@@ -117,9 +117,6 @@ typedef struct {
 	UINT32 default_mount_opt; 			//0x100
 	UINT32 first_meta_bg;
 
-    //UINT32 first_non_reserved_inode;
-    //UINT16 inode_structure_size;
-	//UINT16 block_group_number;
 } EXT2_SUPER_BLOCK;
 
 typedef struct {
