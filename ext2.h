@@ -65,7 +65,7 @@ typedef struct {
     UINT32 group;
     UINT32 block;
     UINT32 offset;
-} EXT2_DIR_ENTRY_LOCATION;
+} EXT2_ENTRY_LOCATION;
 
 typedef struct {
     UINT32 max_inode_count;				//0x00
@@ -142,7 +142,7 @@ typedef struct {
 typedef struct {
     EXT2_FILESYSTEM *fs;
     EXT2_DIR_ENTRY entry;
-    EXT2_DIR_ENTRY_LOCATION location;
+    EXT2_ENTRY_LOCATION location;
 } EXT2_NODE;
 
 int meta_read(EXT2_FILESYSTEM *, SECTOR group,SECTOR block, BYTE* sector);
