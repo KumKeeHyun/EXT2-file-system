@@ -130,7 +130,8 @@ int fs_format(DISK_OPERATIONS* disk, void* param)
 	// 정수 입력 오류 처리
 	if (block_size < 0 || 2 < block_size)
 	{
-		
+		printf("Wrong size");
+		return -1;
 	}
 
 	ext2_format(disk, block_size);
