@@ -5,8 +5,8 @@
 #include "disksim.h"
 
 #define SECTOR_SIZE				512 // 2^9
-#define NUMBER_OF_SECTORS		131,072 //2^17
-// disk size : 64MB 67108864
+#define NUMBER_OF_SECTORS		131072 //2^17
+// disk size : 64MB = 67108864 byte
 
 #define COND_MOUNT				0x01
 #define COND_UMOUNT				0x02
@@ -401,16 +401,12 @@ int shell_cmd_ls( int argc, char* argv[] )
 int shell_cmd_format( int argc, char* argv[] )
 {
 	int		result;
-	//UINT32 block_size;
 	char *param = NULL;
 
-	if( argc >= 2 ) {
+	if( argc >= 2 ) 
+	{
 		param = argv[1];
 	}
-
-	// printf("block size(byte) : ");
-	// scanf("%ud", &block_size);
-		
 
 	result = g_fs.format( &g_disk, param );
 

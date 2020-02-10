@@ -19,22 +19,26 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 	EXT2_SUPER_BLOCK sb;
 	EXT2_GROUP_DESCRIPTOR gd;
 	EXT2_GROUP_DESCRIPTOR  gd_another_group;
-
-    UINT32 byte_per_block = 1024 << log_block_size;
-    UINT32 block_per_group = byte_per_block << 3;
-    BYTE sector_per_block = byte_per_block / disk->bytes_per_sector;
-    UINT32 number_of_group = disk->number_of_sectors / (sector_per_block * block_per_group);
-    
-    // 2(1024)로 해야하는데 이후에 블록을 읽는데 어떻게 할지 모르겠음
-    const UINT32 format_sector_per_block = sector_per_block;
-
-	QWORD sector_num_per_group = block_per_group * sector_per_block;
+	
+    // super block setting 전에는 한 block을 1KB로 인지
+    const UINT32 format_sector_per_block = 2;
+	
 	int i, gi, j;
 	const int BOOT_SECTOR_BASE = 1;
 	char block[MAX_SECTOR_SIZE * format_sector_per_block];
 
-	if (fill_super_block(&sb, disk->number_of_sectors, disk->bytes_per_sector) != EXT2_SUCCESS)
+	// super block 채우기
+	if (fill_super_block(&sb, disk->number_of_sectors, disk->bytes_per_sector, log_block_size) != EXT2_SUCCESS)
 		return EXT2_ERROR;
+
+	UINT32 byte_per_block = 1024 << log_block_size;
+    UINT32 block_per_group = byte_per_block << 3;
+    const BYTE sector_per_block = byte_per_block / disk->bytes_per_sector;
+    UINT32 number_of_group = disk->number_of_sectors / (sector_per_block * block_per_group);
+
+	char block[MAX_SECTOR_SIZE * sector_per_block];
+
+	QWORD sector_num_per_group = block_per_group * sector_per_block;
 
 	ZeroMemory(block, sizeof(block));
 	memcpy(block, &sb, sizeof(sb));
@@ -132,10 +136,83 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 	return EXT2_SUCCESS;
 }
 
-int fill_super_block(EXT2_SUPER_BLOCK * sb, SECTOR numberOfSectors, UINT32 bytesPerSector)
+int fill_super_block(EXT2_SUPER_BLOCK * sb, SECTOR numberOfSectors, UINT32 bytesPerSector, UINT32 log_block_size)
 {
+	UINT32 byte_per_block = 1024 << log_block_size;
+    UINT32 block_per_group = byte_per_block << 3;
+    BYTE sector_per_block = byte_per_block / bytesPerSector;
+    UINT32 number_of_group = numberOfSectors / (sector_per_block * block_per_group);
+
+
 	ZeroMemory(sb, sizeof(EXT2_SUPER_BLOCK));
 
+	// max_inode_count = disk 크기 * block 크기
+	sb->max_inode_count = (bytesPerSector * numberOfSectors) / byte_per_block;
+	sb->block_count = numberOfSectors / sector_per_block;
+	sb->reserved_block_count = (UINT32)( (double)sb->block_count * (5./100.) );
+	// super block 초기화 당시 free block, inode 개수 = 최대 block, inode 개수
+	sb->free_block_count = sb->block_count;
+    sb->free_inode_count = sb->max_inode_count;
+	// 첫 번째 블록 (모르겠음)
+    sb->first_data_block = 0x00; 
+    sb->log_block_size = log_block_size; // 0, 1, 2
+	// 못구하겠음
+    sb->log_fragmentation_size;	
+
+    sb->block_per_group = block_per_group;
+	// 못구하겠음
+    sb->fragmentation_per_group;
+
+    sb->inode_per_group = sb->inode_per_group / number_of_group;
+
+	// 못구하겠음
+	sb->mtime;
+	sb->wtime;
+	sb->mount_cnt = 0;
+	sb->max_mount_cnt;
+
+    sb->magic_signature = 0xEF53;
+    sb->state = 1;
+    sb->errors = 0;
+
+	// 못구하겠음
+	sb->minor_version;
+	sb->last_check;
+
+	sb->check_interval = 0;
+	sb->creator_OS = 0; // linux
+	sb->major_version = 0; // inode 크기 고정
+
+	// 못구하겠음
+	sb->def_res_uid; 
+	sb->def_res_gid;
+
+	sb->first_ino = 11; 
+	sb->inode_size = 128;
+
+	// 못구하겠음
+	sb->block_group_num;
+
+	sb->feature_compat = 0x24; // 책에 있는 것 그대로
+	sb->feature_incompat;
+	sb->feature_read_only_compat;
+	sb->uuid[16];
+	sb->volume_name[16];
+	sb->last_mounted[64];
+	sb->algorithm_usage_bitmap;
+	sb->prealloc_block;
+	sb->prealloc_dir_block;
+	sb->padding_1;
+	sb->journal_uuid[16];			
+	sb->journal_inode_num;
+	sb->journal_dev;
+	sb->last_orphan;
+	sb->hash_seed[16];
+	sb->def_hash_version;
+	sb->sector_per_block = sector_per_block;            
+	sb->padding_3;
+	sb->default_mount_opt; 		
+	sb->first_meta_bg;
 
 	return EXT2_SUCCESS;
 }

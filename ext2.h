@@ -69,7 +69,7 @@ typedef struct {
 
 typedef struct {
     UINT32 max_inode_count;				//0x00
-    UINT32 block_count;
+    UINT32 block_count; // 파일 시스템 내의 전체 블록의 개수
     UINT32 reserved_block_count;
     UINT32 free_block_count;		
     UINT32 free_inode_count;			//0x10
@@ -93,7 +93,7 @@ typedef struct {
 	UINT32 major_version;
 	UINT16 def_res_uid;					//0x50
 	UINT16 def_res_gid;
-	UINT32 first_ino;
+	UINT32 first_ino; // 예약되지 않은 inode의 첫번째 index
 	UINT16 inode_size;
 	UINT16 block_group_num;
 	UINT32 feature_compat; 
@@ -155,7 +155,7 @@ int ext2_create(EXT2_NODE* parent, char* entryName, EXT2_NODE* retEntry);
 int ext2_lookup(EXT2_NODE* parent, const char* entryName, EXT2_NODE* retEntry);
 
 UINT32 expand_block(EXT2_FILESYSTEM * , UINT32 );
-int fill_super_block(EXT2_SUPER_BLOCK * sb, SECTOR numberOfSectors, UINT32 bytesPerSector);
+int fill_super_block(EXT2_SUPER_BLOCK * sb, SECTOR numberOfSectors, UINT32 bytesPerSector, UINT32 log_block_size);
 int fill_descriptor_block(EXT2_GROUP_DESCRIPTOR * gd, EXT2_SUPER_BLOCK * sb, SECTOR numberOfSectors, UINT32 bytesPerSector);
 int create_root(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK * sb);
 typedef int(*EXT2_NODE_ADD)(EXT2_FILESYSTEM*,void*, EXT2_NODE*);
