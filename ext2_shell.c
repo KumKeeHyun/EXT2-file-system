@@ -83,7 +83,7 @@ void fs_dumpDataBlockByNum(DISK_OPERATIONS * disk, SHELL_FS_OPERATIONS * fsOprs,
 {
 	char * start, *end;
 
-	start = ((DISK_MEMORY *)disk->pdata)->address + (1 + num) * disk->bytes_per_sector * ((EXT2_FILESYSTEM *)fsOprs->pdata)->sb.sector_per_block;
+	start = ((DISK_MEMORY *)disk->pdata)->address + (num) * disk->bytes_per_sector * ((EXT2_FILESYSTEM *)fsOprs->pdata)->sb.sector_per_block + 1024;
 	end = start + disk->bytes_per_sector * ((EXT2_FILESYSTEM *)fsOprs->pdata)->sb.sector_per_block;
 	printFromP2P(start, end);
 
@@ -134,9 +134,8 @@ int fs_format(DISK_OPERATIONS* disk, void* param)
 		return -1;
 	}
 
-	ext2_format(disk, block_size);
+	return ext2_format(disk, block_size);
 
-	return  1;
 }
 
 static SHELL_FILE_OPERATIONS g_file =
