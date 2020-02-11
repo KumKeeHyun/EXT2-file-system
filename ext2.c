@@ -21,10 +21,10 @@ int write_block(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK* sb, SECTOR* block, unsi
 
     for (int i = 0; i < sb->sector_per_block; i++)
 	{
-        if (disk->write_sector(disk, sector_index + i, &block[i * disk->bytes_per_sector]) == EXT2_ERROR)
+        if (disk->write_sector(disk, sector_index + i, &block[i * disk->bytes_per_sector]) == EXT2_ERROR) {
 			PRINTF("write_block() function error\n");
 			return EXT2_ERROR;
-		
+		}
     }
 	return EXT2_SUCCESS;
 }
@@ -408,14 +408,17 @@ int create_root(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK * sb, EXT2_GROUP_DESCRIP
 
 void process_meta_data_for_inode_used(EXT2_NODE * retEntry, UINT32 inode_num, int fileType)
 {
+	return EXT2_ERROR;
 }
 
 int insert_entry(UINT32 inode_num, EXT2_NODE * retEntry, int fileType)
 {
+	return EXT2_ERROR;
 }
 
 UINT32 get_available_data_block(EXT2_FILESYSTEM * fs, UINT32 inode_num)
 {
+	return EXT2_ERROR;
 }
 
 void process_meta_data_for_block_used(EXT2_FILESYSTEM * fs, UINT32 inode_num)
@@ -424,6 +427,7 @@ void process_meta_data_for_block_used(EXT2_FILESYSTEM * fs, UINT32 inode_num)
 
 UINT32 expand_block(EXT2_FILESYSTEM * fs, UINT32 inode_num)
 {
+	return EXT2_ERROR;
 }
 
 int meta_read(EXT2_FILESYSTEM * fs, SECTOR group, SECTOR block, BYTE* sector)
@@ -496,7 +500,7 @@ int write_disk_per_block(EXT2_FILESYSTEM *fs, SECTOR group, SECTOR block, BYTE *
     for (SECTOR i = 0; i < sector_per_block; i++) 
 	{
         if ( disk->write_sector(fs->disk, real_sector_index + i, &block_buf[i * disk->bytes_per_sector]) == EXT2_ERROR)
-			return EXT2_ERROR
+			return EXT2_ERROR;
     }
     return EXT2_SUCCESS;
 }
@@ -585,25 +589,17 @@ int format_name(EXT2_FILESYSTEM* fs, char* name)
 	UINT32	i, length;
 	UINT32	extender = 0, nameLength = 0;
 	UINT32	extenderCurrent = 8;
-	BYTE	regularName[MAX_ENTRY_NAME_LENGTH];
+	BYTE	regularName[EXT2_NAME_LEN];
 
-	memset(regularName, 0x20, sizeof(regularName));
+	memset(regularName, 0, sizeof(regularName));
 	length = strlen(name);
 
-	if (strncmp(name, "..", 2) == 0)
+	if (strcmp(name, "..") == 0 | strcmp(name, ".") == 0)
 	{
-		memcpy(name, "..         ", 11);
-		return EXT2_SUCCESS;
-	}
-	else if (strncmp(name, ".", 1) == 0)
-	{
-		memcpy(name, ".          ", 11);
 		return EXT2_SUCCESS;
 	}
 	else
 	{
-		upper_string(name, MAX_ENTRY_NAME_LENGTH);
-
 		for (i = 0; i < length; i++)
 		{
 			if (name[i] != '.' && !isdigit(name[i]) && !isalpha(name[i]))
@@ -626,7 +622,7 @@ int format_name(EXT2_FILESYSTEM* fs, char* name)
 				return EXT2_ERROR;
 		}
 
-		if (nameLength > 8 || nameLength == 0 || extenderCurrent > 11)
+		if (nameLength > EXT2_NAME_LEN || nameLength == 0 || extenderCurrent > 11)
 			return EXT2_ERROR;
 	}
 
@@ -636,30 +632,33 @@ int format_name(EXT2_FILESYSTEM* fs, char* name)
 
 int lookup_entry(EXT2_FILESYSTEM* fs, const int inode, const char* name, EXT2_NODE* retEntry)
 {
+	return EXT2_ERROR;
 }
 
 int find_entry_at_sector(const BYTE* sector, const BYTE* formattedName, UINT32 begin, UINT32 last, UINT32* number)
 {
+	return EXT2_ERROR;
 }
 
 int find_entry_on_root(EXT2_FILESYSTEM* fs, INODE inode, char* formattedName, EXT2_NODE* ret)
 {
+	return EXT2_ERROR;
 }
 
 int find_entry_on_data(EXT2_FILESYSTEM* fs, INODE first, const BYTE* formattedName, EXT2_NODE* ret)
 {
+	return EXT2_ERROR;
 }
 
-int read_root_sector(EXT2_FILESYSTEM* fs, BYTE* block)
+int read_root_sector(EXT2_FILESYSTEM* fs, EXT2_DIR_ENTRY *root)
 {
-	UINT32 inode = 2; // root inode 
-	INODE inodeBuffer;
-	SECTOR rootBlock;
-	get_inode(fs, inode, &inodeBuffer);
-	rootBlock = get_data_block_at_inode(fs, inodeBuffer, 1);
+	root->file_type = EXT2_FT_DIR;
+	root->inode = 2;
+	root->name_len = strlen(VOLUME_LABLE);
+	memcpy(root->name, VOLUME_LABLE, root->name_len);
+	root->record_len = sizeof(EXT2_DIR_ENTRY) - EXT2_NAME_LEN + root->name_len;
 
-	// 읽기 성공하면 succes(0), 실패하면 error (-1) return
-	return read_disk_per_block(fs, 0, rootBlock, block);
+	return EXT2_SUCCESS;
 }
 
 int ext2_create(EXT2_NODE* parent, char* entryName, EXT2_NODE* retEntry)
@@ -671,12 +670,13 @@ int ext2_create(EXT2_NODE* parent, char* entryName, EXT2_NODE* retEntry)
 
 int get_data_block_at_inode(EXT2_FILESYSTEM *fs, INODE inode, UINT32 number)
 {
+	return EXT2_ERROR;
 }
 
 int ext2_read_superblock(EXT2_FILESYSTEM* fs, EXT2_NODE* root)
 {
 	INT result;
-	const UINT32 sector_per_block = sb.sector_per_block;
+	const UINT32 sector_per_block = fs->sb.sector_per_block;
 	BYTE block[MAX_SECTOR_SIZE * sector_per_block];
 	UINT32 super_block = 0; // super block 시작 block
 	UINT32 group_descriptor_block = 1; // group descriptor table 시작 block
@@ -697,14 +697,9 @@ int ext2_read_superblock(EXT2_FILESYSTEM* fs, EXT2_NODE* root)
 	if (fs->sb.magic_signature != 0xEF53) 
 		return EXT2_ERROR;
 
-	/* block에 root sector 읽어오기 */
-	ZeroMemory(block, sizeof(block));
-	if (read_root_sector(fs, block) == EXT2_ERROR)
-		return EXT2_ERROR;
-
-	/* block을 root에 쓰고 root 디렉토리로 지정 */
+	/* root 디렉토리로 엔트리 채우기 */
 	ZeroMemory(root, sizeof(EXT2_NODE));
-	memcpy(&root->entry, block, sizeof(EXT2_DIR_ENTRY));
+	if (read_root_sector(fs, &root->entry) == EXT2_ERROR)
 	root->fs = fs;
 
 	return EXT2_SUCCESS;
@@ -712,10 +707,12 @@ int ext2_read_superblock(EXT2_FILESYSTEM* fs, EXT2_NODE* root)
 
 UINT32 get_free_inode_number(EXT2_FILESYSTEM* fs)
 {
+	return EXT2_ERROR;
 }
 
 int set_inode_onto_inode_table(EXT2_FILESYSTEM *fs, const UINT32 which_inode_num_to_write, INODE * inode_to_write)
 {
+	return EXT2_ERROR;
 }
 
 int ext2_lookup(EXT2_NODE* parent, const char* entryName, EXT2_NODE* retEntry)
