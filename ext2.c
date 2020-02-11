@@ -369,44 +369,49 @@ int write_disk_per_block(EXT2_FILESYSTEM *fs, SECTOR group, SECTOR block, BYTE *
 
 int get_inode_location(EXT2_FILESYSTEM *fs, UINT32 inode_num, EXT2_ENTRY_LOCATION *loc) {
 	if (inode_num < 1) 
-		return -1;
+		return EXT2_ERROR;
+
 	UINT32 inode_per_group = fs->sb.inode_per_group;
 	UINT32 table_index = (inode_num - 1) % inode_per_group;
 	UINT32 inode_per_block = (1024 << fs->sb.log_block_size) / 128;
-
+	// 128말고 fs->sb.inode_size 하면 안될까
+	
 	loc->group = inode_num / inode_per_group;
 	loc->block = (table_index / inode_per_block) + fs->gd.start_block_of_inode_table - 1;
 	loc->offset = table_index % inode_per_block;
 
-	return 0;
+	return EXT2_SUCCESS;
 }
 
 int get_inode(EXT2_FILESYSTEM* fs, const UINT32 inode_num, INODE *inodeBuffer) {
 	if (inode_num < 1)
-		return -1;
+		return EXT2_ERROR;
 
 	const BYTE sector_per_block = fs->sb.sector_per_block;
 	BYTE block[MAX_SECTOR_SIZE * sector_per_block];
 	EXT2_ENTRY_LOCATION loc;
 
-	get_inode_location(fs, inode_num, &loc);
-	read_disk_per_block(fs, loc.group, loc.block, block);
+	if (get_inode_location(fs, inode_num, &loc) == EXT2_ERROR)
+		return EXT2_ERROR; 
+
+	if (read_disk_per_block(fs, loc.group, loc.block, block) == EXT2_ERROR)
+		return EXT2_ERROR;
 
 	*inodeBuffer = ((INODE *)block)[loc.offset];
 
-	return 0;
+	return EXT2_SUCCESS;
 }
 
 int get_block_location(EXT2_FILESYSTEM *fs, UINT32 block_num, EXT2_ENTRY_LOCATION *loc) {
 	if (block_num < 1) 
-		return -1;
+		return EXT2_ERROR;
 	UINT32 block_per_group = fs->sb.block_per_group;
 
 	loc->group = block_num / block_per_group;
 	loc->block = block_num % block_per_group;
 	loc->offset = 0;
 
-	return 0;
+	return EXT2_SUCCESS;
 }
 
 // ------------------------------------------------------
@@ -554,15 +559,16 @@ int ext2_read_superblock(EXT2_FILESYSTEM* fs, EXT2_NODE* root)
 	read_disk_per_block(fs, 0, group_descriptor_block, block);
 	memcpy(&fs->gd, block, sizeof(EXT2_GROUP_DESCRIPTOR));
 
-	// super block인지 확인
+	/* super block인지 확인 */
 	if (fs->sb.magic_signature != 0xEF53) 
 		return EXT2_ERROR;
 
-	// block에 root sector 읽어오기
+	/* block에 root sector 읽어오기 */
 	ZeroMemory(block, sizeof(block));
 	if (read_root_sector(fs, block) == EXT2_ERROR)
 		return EXT2_ERROR;
 
+	/* block을 root에 쓰고 root 디렉토리로 지정 */
 	ZeroMemory(root, sizeof(EXT2_NODE));
 	memcpy(&root->entry, block, sizeof(EXT2_DIR_ENTRY));
 	root->fs = fs;
