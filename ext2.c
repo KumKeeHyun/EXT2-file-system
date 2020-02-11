@@ -589,16 +589,15 @@ int find_entry_on_data(EXT2_FILESYSTEM* fs, INODE first, const BYTE* formattedNa
 {
 }
 
-int read_root_sector(EXT2_FILESYSTEM* fs, BYTE* block)
+int read_root_sector(EXT2_FILESYSTEM* fs, EXT2_DIR_ENTRY *root)
 {
-	UINT32 inode = 2; // root inode 
-	INODE inodeBuffer;
-	SECTOR rootBlock;
-	get_inode(fs, inode, &inodeBuffer);
-	rootBlock = get_data_block_at_inode(fs, inodeBuffer, 1);
+	root->file_type = EXT2_FT_DIR;
+	root->inode = 2;
+	root->name_len = strlen(VOLUME_LABLE);
+	memcpy(root->name, VOLUME_LABLE, root->name_len);
+	root->record_len = sizeof(EXT2_DIR_ENTRY) - EXT2_NAME_LEN + root->name_len;
 
-	// 읽기 성공하면 succes(0), 실패하면 error (-1) return
-	return read_disk_per_block(fs, 0, rootBlock, block);
+	return EXT2_SUCCESS;
 }
 
 int ext2_create(EXT2_NODE* parent, char* entryName, EXT2_NODE* retEntry)
@@ -615,7 +614,7 @@ int get_data_block_at_inode(EXT2_FILESYSTEM *fs, INODE inode, UINT32 number)
 int ext2_read_superblock(EXT2_FILESYSTEM* fs, EXT2_NODE* root)
 {
 	INT result;
-	const UINT32 sector_per_block = sb.sector_per_block;
+	const UINT32 sector_per_block = fs->sb.sector_per_block;
 	BYTE block[MAX_SECTOR_SIZE * sector_per_block];
 	UINT32 super_block = 0; // super block 시작 block
 	UINT32 group_descriptor_block = 1; // group descriptor table 시작 block
@@ -636,14 +635,10 @@ int ext2_read_superblock(EXT2_FILESYSTEM* fs, EXT2_NODE* root)
 	if (fs->sb.magic_signature != 0xEF53) 
 		return EXT2_ERROR;
 
-	/* block에 root sector 읽어오기 */
-	ZeroMemory(block, sizeof(block));
-	if (read_root_sector(fs, block) == EXT2_ERROR)
-		return EXT2_ERROR;
-
-	/* block을 root에 쓰고 root 디렉토리로 지정 */
+	/* root 디렉토리로 엔트리 채우기 */
 	ZeroMemory(root, sizeof(EXT2_NODE));
-	memcpy(&root->entry, block, sizeof(EXT2_DIR_ENTRY));
+	if (read_root_sector(fs, &root->entry) == EXT2_ERROR)
+		return EXT2_ERROR;
 	root->fs = fs;
 
 	return EXT2_SUCCESS;
