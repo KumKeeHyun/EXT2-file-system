@@ -60,7 +60,7 @@ int disksim_read( DISK_OPERATIONS* this, SECTOR sector, void* data )
 	char* disk = ( ( DISK_MEMORY* )this->pdata )->address;
 
 	if( sector < 0 || sector >= this->number_of_sectors )
-		return -1;
+		return -1; 
 
 	// sector 크기만큼 disk의 정보를 data에 복사
 	memcpy( data, &disk[sector * this->bytes_per_sector], this->bytes_per_sector );
