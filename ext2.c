@@ -243,7 +243,7 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 	PRINTF("sector byte size               : %u\n", MAX_SECTOR_SIZE);
 	PRINTF("\n");
 
-	if (create_root(disk, &sb, &gd_another_group) != EXT2_SUCCESS)
+	if (create_root(disk, &sb, &gd) != EXT2_SUCCESS)
 	{
 		PRINTF("create_root() function error\n");
 		return EXT2_ERROR;
@@ -263,7 +263,7 @@ int fill_super_block(EXT2_SUPER_BLOCK * sb, SECTOR numberOfSectors, UINT32 bytes
 
 	UINT32 number_of_descriptor_block = ( number_of_group * 32 + ( byte_per_block - 1 ) ) / byte_per_block; 
 	UINT32 inode_per_block = 1 << (3 + log_block_size);
-	UINT32 max_inode_count = (bytesPerSector * numberOfSectors) / byte_per_block;
+	UINT32 max_inode_count = numberOfSectors / sector_per_block / 2;
 	UINT32 inode_per_group = max_inode_count / number_of_group;
 	UINT32 number_of_inode_block =(inode_per_group + (inode_per_block - 1)) / inode_per_block; // inode table이 차지하는 block 수
 	UINT32 number_of_used_block = number_of_descriptor_block + number_of_inode_block + 3; // 3 : super block + block bitmap + inode bitmap
@@ -349,7 +349,7 @@ int fill_super_block(EXT2_SUPER_BLOCK * sb, SECTOR numberOfSectors, UINT32 bytes
 	sb->first_meta_bg = sb->block_group_num * sb->block_per_group // 해당 블록 그룹의 첫번째 블록
 						+ number_of_used_block; // 그룹내에서 meta block 이전까지의 블록의 개수
 
-
+	return EXT2_SUCCESS;
 }
 
 int fill_descriptor_block(EXT2_GROUP_DESCRIPTOR * gd, EXT2_SUPER_BLOCK * sb, SECTOR numberOfSectors, UINT32 bytesPerSector)
@@ -384,13 +384,18 @@ int create_root(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK * sb, EXT2_GROUP_DESCRIP
 	UINT32 inode_table_block = gd->start_block_of_inode_table;
 	UINT32 root_entry_block = sb->first_meta_bg;
 
+	printf("1\n");
+
 	// set inode
 	read_block(disk, sb, block, inode_table_block);
+	printf("1-1\n");
 	INODE *root_inode = ((INODE *)block) + 1; // 2번 inode
 	root_inode->mode = 0x41A4; // directory, 644
 	root_inode->link_cnt = 2; // ".", ".."
 	root_inode->i_block[0] = root_entry_block;
 	write_block(disk, sb, block, inode_table_block);
+
+	printf("2\n");
 
 	// set dir_entry
 	// "." entry
@@ -401,6 +406,8 @@ int create_root(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK * sb, EXT2_GROUP_DESCRIP
 	entry->name_len = strlen(".");
 	memcpy(entry->name, ".", entry->name_len);
 	entry->record_len = sizeof(EXT2_DIR_ENTRY) - EXT2_NAME_LEN + entry->name_len;
+
+	printf("3\n");
 
 	// ".." entry
 	EXT2_DIR_ENTRY *prev_entry = entry;
@@ -413,10 +420,14 @@ int create_root(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK * sb, EXT2_GROUP_DESCRIP
 
 	write_block(disk, sb, block, root_entry_block);
 
+	printf("4\n");
+
 	// set block_bitmap
 	read_block(disk, sb, block, block_bitmap_block);
 	(((volatile unsigned int *) block)[root_entry_block >> 5]) |= (1UL << (root_entry_block & 31));
 	write_block(disk, sb, block, block_bitmap_block);
+
+	printf("5\n");
 
 	return EXT2_SUCCESS;
 }
