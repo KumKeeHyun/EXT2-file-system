@@ -174,13 +174,14 @@ int fs_mount(DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, SHELL_ENTRY* ro
 
 	result = ext2_read_superblock(fs, &ext2_entry);
 	number_of_group = disk->number_of_sectors / (fs->sb.sector_per_block * fs->sb.block_per_group);
+	
 	if (result == EXT2_SUCCESS)
 	{
 		printf("number of groups         : %d\n", number_of_group);
 		printf("blocks per group         : %d\n", fs->sb.block_per_group);
 		printf("bytes per block          : %d\n", disk->bytes_per_sector);
-		printf("free block count	 : %d\n", fs->sb.free_block_count);
-		printf("free inode count	 : %d\n", fs->sb.free_inode_count);
+		printf("free block count	 	 : %d\n", fs->sb.free_block_count);
+		printf("free inode count	 	 : %d\n", fs->sb.free_inode_count);
 		printf("first non reserved inode : %d\n", fs->sb.first_ino);
 		printf("inode structure size	 : %d\n", fs->sb.inode_size);
 		printf("first data block number  : %d\n", fs->sb.first_meta_bg);
