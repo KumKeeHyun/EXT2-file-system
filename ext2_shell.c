@@ -267,6 +267,7 @@ int ext2_entry_to_shell_entry(EXT2_FILESYSTEM* fs, const EXT2_NODE* ext2_entry, 
 	int inode = ext2_entry->entry.inode;
 	int result = get_inode(fs, inode, &inodeBuffer);
 
+	/*
 	if (ext2_entry->entry.name[0] != '.' && inode == 2);
 	else {
 		str = shell_entry->name;
@@ -277,6 +278,7 @@ int ext2_entry_to_shell_entry(EXT2_FILESYSTEM* fs, const EXT2_NODE* ext2_entry, 
 			str = my_strncpy(str, &ext2_entry->entry.name[8], 3);
 		}
 	}
+	*/
 	if (FILE_TYPE_DIR & inodeBuffer.mode)
 		shell_entry->isDirectory = 1;
 	else
