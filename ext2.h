@@ -115,7 +115,7 @@ typedef struct {
 	BYTE sector_per_block;              // padding_2 -> sector_per_block
 	UINT16 padding_3;
 	UINT32 default_mount_opt; 			//0x100
-	UINT32 first_meta_bg;
+	UINT32 first_meta_bg; // block table이 시작되는 위치
 
 } EXT2_SUPER_BLOCK;
 
