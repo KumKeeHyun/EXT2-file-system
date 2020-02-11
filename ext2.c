@@ -101,6 +101,7 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 			ZeroMemory(block, sizeof(block));
 		}
 	} 
+	printf("sb->first_meta_bg after gd setting : %d\n", sb.first_meta_bg);
 
 	// 꽉 채우지 못한 마지막 block 써줌
 	if (number_of_group % descriptor_per_block != 0)
@@ -163,14 +164,6 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 	for (gi = 1; gi < number_of_group; gi++)
 	{
 		sb.block_group_num = gi;
-		
-		gd_another_group.start_block_of_block_bitmap = sb.block_group_num * sb.block_per_group + number_of_descriptor_block + 1;
-    	gd_another_group.start_block_of_inode_bitmap = gd.start_block_of_block_bitmap + 1;
-    	gd_another_group.start_block_of_inode_table = gd.start_block_of_inode_bitmap + 1;
-
-		sb.first_meta_bg = gd.start_block_of_inode_table // inode table 시작 block
-							+ ((sb.inode_per_group + (sb.inode_per_group - 1)) >> (3 + sb.log_block_size)) // inode table이 차지하는 block 수
-							+ 3; // super block + block bitmap + inode bitmap
 
 		/* gi번째 group에 super block 채우기 */
 		ZeroMemory(block, sizeof(block));
@@ -218,6 +211,7 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 
 		if (write_block(disk, &sb, block, gd.start_block_of_inode_bitmap) == EXT2_ERROR)
 			return EXT2_ERROR;
+
 		/* gi번째 group에 inode table 채우기 */
 		ZeroMemory(block, sizeof(block));
 
@@ -228,6 +222,7 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 		}
 
 	}
+	printf("sb->first_meta_bg after all : %d\n", sb.first_meta_bg);
 
 	printf("7\n");
 
@@ -258,19 +253,26 @@ int fill_super_block(EXT2_SUPER_BLOCK * sb, SECTOR numberOfSectors, UINT32 bytes
 {
 	UINT32 byte_per_block = 1024 << log_block_size;
     UINT32 block_per_group = byte_per_block << 3;
+	printf("numberOfSectors : %d\n", numberOfSectors);
+	printf("block_per_group : %d\n", block_per_group);
     BYTE sector_per_block = byte_per_block / bytesPerSector;
-    UINT32 number_of_group = numberOfSectors / (sector_per_block * block_per_group);
-
+	printf("sector_per_block : %d\n", sector_per_block);
+    UINT32 number_of_group = (numberOfSectors + (sector_per_block * block_per_group - 1)) / (sector_per_block * block_per_group);
+	printf("number_of_group : %d\n",number_of_group);
 	UINT32 number_of_descriptor_block = ( number_of_group * 32 + ( byte_per_block - 1 ) ) / byte_per_block; 
+	printf ("어디냐 1\n");
 	UINT32 inode_per_block = 1 << (3 + log_block_size);
 	UINT32 max_inode_count = numberOfSectors / sector_per_block / 2;
+	printf ("어디냐 2\n");
 	UINT32 inode_per_group = max_inode_count / number_of_group;
-	UINT32 number_of_inode_block =(inode_per_group + (inode_per_block - 1)) / inode_per_block; // inode table이 차지하는 block 수
+	printf ("어디냐 3\n");
+	UINT32 number_of_inode_block = (inode_per_group + (inode_per_block - 1)) / inode_per_block; // 한 그룹에서 inode table이 차지하는 block 수
+	printf ("어디냐 4\n");
 	UINT32 number_of_used_block = number_of_descriptor_block + number_of_inode_block + 3; // 3 : super block + block bitmap + inode bitmap
-
+	printf ("어디냐 5\n");
 	ZeroMemory(sb, sizeof(EXT2_SUPER_BLOCK));
 
-	// max_inode_count = disk 크기 * block 크기
+	// max_inode_count = block 개수 / 2로 약속
 	sb->max_inode_count = max_inode_count;
 	sb->block_count = numberOfSectors / sector_per_block;
 	sb->reserved_block_count = (UINT32)( (double)sb->block_count * (5./100.) );
@@ -316,9 +318,7 @@ int fill_super_block(EXT2_SUPER_BLOCK * sb, SECTOR numberOfSectors, UINT32 bytes
 
 	sb->first_ino = 11; 
 	sb->inode_size = 128;
-
-	// 0
-	sb->block_group_num;
+	sb->block_group_num = 0;
 
 	// 책에 있는 것 그대로
 	sb->feature_compat = 0x24; 
@@ -346,8 +346,7 @@ int fill_super_block(EXT2_SUPER_BLOCK * sb, SECTOR numberOfSectors, UINT32 bytes
 	sb->padding_3;
 	sb->default_mount_opt;
 
-	sb->first_meta_bg = sb->block_group_num * sb->block_per_group // 해당 블록 그룹의 첫번째 블록
-						+ number_of_used_block; // 그룹내에서 meta block 이전까지의 블록의 개수
+	sb->first_meta_bg = number_of_used_block; // 그룹내에서 meta block 이전까지의 블록의 개수
 
 	return EXT2_SUCCESS;
 }
@@ -356,11 +355,11 @@ int fill_descriptor_block(EXT2_GROUP_DESCRIPTOR * gd, EXT2_SUPER_BLOCK * sb, SEC
 {
 	UINT32 byte_per_block = 1024 << sb->log_block_size;
 	UINT32 number_of_group = numberOfSectors / (sb->sector_per_block * sb->block_per_group);
-	UINT32 number_of_descriptor_block = ( number_of_group * 32) / byte_per_block;
+	UINT32 number_of_descriptor_block = ( number_of_group * 32 + (byte_per_block - 1)) / byte_per_block;
 
 	ZeroMemory(gd, sizeof(EXT2_GROUP_DESCRIPTOR));
 
-	gd->start_block_of_block_bitmap = sb->block_group_num * sb->block_per_group + number_of_descriptor_block + 1;
+	gd->start_block_of_block_bitmap = number_of_descriptor_block + 1;
     gd->start_block_of_inode_bitmap = gd->start_block_of_block_bitmap + 1;
     gd->start_block_of_inode_table = gd->start_block_of_inode_bitmap + 1;
     
