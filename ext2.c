@@ -310,17 +310,40 @@ int create_root(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK * sb, EXT2_GROUP_DESCRIP
 	UINT32 inode_table_block = gd->start_block_of_inode_table;
 	UINT32 root_entry_block = sb->first_meta_bg;
 
+	// set inode
 	read_block(disk, sb, block, inode_table_block);
 	INODE *root_inode = ((INODE *)block) + 1; // 2번 inode
 	root_inode->mode = 0x41A4; // directory, 644
-	root_inode->link_cnt = 2; // ".", ".." ??
+	root_inode->link_cnt = 2; // ".", ".."
 	root_inode->i_block[0] = root_entry_block;
 	write_block(disk, sb, block, inode_table_block);
 
+	// set dir_entry
+	// "." entry
 	ZeroMemory(block, sizeof(block));
-	EXT2_DIR_ENTRY entry;
-	//read_disk_per_block
-	
+	EXT2_DIR_ENTRY *entry = (EXT2_DIR_ENTRY *)block;
+	entry->inode = 2;
+	entry->file_type = EXT2_FT_DIR;
+	entry->name_len = strlen(".");
+	memcpy(entry->name, ".", entry->name_len);
+	entry->record_len = sizeof(EXT2_DIR_ENTRY) - EXT2_NAME_LEN + entry->name_len;
+
+	// ".." entry
+	EXT2_DIR_ENTRY *prev_entry = entry;
+	entry = (EXT2_DIR_ENTRY *)(block + prev_entry->record_len);
+	entry->inode = 2;
+	entry->file_type = EXT2_FT_DIR;
+	entry->name_len = strlen("..");
+	memcpy(entry->name, "..", entry->name_len);
+	entry->record_len = (1024 << sb->log_block_size) - prev_entry->record_len;
+
+	write_block(disk, sb, block, root_entry_block);
+
+	// set block_bitmap
+	read_block(disk, sb, block, block_bitmap_block);
+	(((volatile unsigned int *) block)[root_entry_block >> 5]) |= (1UL << (root_entry_block & 31));
+	write_block(disk, sb, block, block_bitmap_block);
+
 	return EXT2_SUCCESS;
 }
 
@@ -360,6 +383,30 @@ int meta_write(EXT2_FILESYSTEM * fs, SECTOR group, SECTOR block, BYTE* sector)
 }
 
 // ------------------------------------------------------
+
+// addr : 해당 group의 block_bitmap 시작 주소
+// num : 해당 group에서의 block number
+static int test_block_bit( int nr, const volatile void* addr )
+{
+	 return ((1UL << (nr & 31)) & (((const volatile unsigned int *) addr)[nr >> 5])) != 0;
+}
+
+void change_block_bit(EXT2_FILESYSTEM *fs, UINT32 num) 
+{
+	UINT32 boot_block = 1024 / MAX_SECTOR_SIZE;
+	UINT32 bitmap = ( (num / fs->sb.block_per_group) * fs->sb.block_per_group + fs->gd.start_block_of_block_bitmap ) 
+					* fs->sb.sector_per_block + boot_block;
+	//disk->pdata[fs->disk->bytes_per_sector * bitmap]
+	UINT32 nr = num % fs->sb.block_per_group;
+	volatile void *addr = ((BYTE *)fs->disk->pdata) + fs->disk->bytes_per_sector * bitmap;
+
+	if (test_block_bit(nr, addr) == 1) {
+		(((volatile unsigned int *)addr)[nr>>5]) &= (0xFFFFFFFF ^ (1UL << (nr & 31)));
+	}
+	else {
+		(((volatile unsigned int *) addr)[nr >> 5]) |= (1UL << (nr & 31));
+	}
+}
 
 int read_disk_per_block(EXT2_FILESYSTEM *fs, SECTOR group, SECTOR block, BYTE *block_buf) 
 {

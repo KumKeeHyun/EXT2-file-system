@@ -83,8 +83,8 @@ void fs_dumpDataBlockByNum(DISK_OPERATIONS * disk, SHELL_FS_OPERATIONS * fsOprs,
 {
 	char * start, *end;
 
-	start = ((DISK_MEMORY *)disk->pdata)->address + (1 + num) * disk->bytes_per_sector;
-	end = start + disk->bytes_per_sector;
+	start = ((DISK_MEMORY *)disk->pdata)->address + (1 + num) * disk->bytes_per_sector * ((EXT2_FILESYSTEM *)fsOprs->pdata)->sb.sector_per_block;
+	end = start + disk->bytes_per_sector * ((EXT2_FILESYSTEM *)fsOprs->pdata)->sb.sector_per_block;
 	printFromP2P(start, end);
 
 }

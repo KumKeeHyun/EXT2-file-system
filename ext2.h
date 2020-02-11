@@ -7,7 +7,7 @@
 
 #define MAX_SECTOR_SIZE 512
 
-#define EXT2_NAME_LEN 11
+#define EXT2_NAME_LEN 255
 #define EXT2_N_BLOCKS 15
 #define	VOLUME_LABLE "EXT2 BY NC"
 
