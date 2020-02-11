@@ -164,10 +164,6 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 	{
 		sb.block_group_num = gi;
 		
-		gd.start_block_of_block_bitmap = sb.block_group_num * sb.block_per_group + number_of_descriptor_block + 1;
-    	gd.start_block_of_inode_bitmap = gd.start_block_of_block_bitmap + 1;
-    	gd.start_block_of_inode_table = gd.start_block_of_inode_bitmap + 1;
-
 		gd_another_group.start_block_of_block_bitmap = sb.block_group_num * sb.block_per_group + number_of_descriptor_block + 1;
     	gd_another_group.start_block_of_inode_bitmap = gd.start_block_of_block_bitmap + 1;
     	gd_another_group.start_block_of_inode_table = gd.start_block_of_inode_bitmap + 1;
@@ -241,6 +237,10 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 	PRINTF("block byte size                : %u\n", byte_per_block);
 	PRINTF("total sectors count            : %u\n", disk->number_of_sectors);
 	PRINTF("sector byte size               : %u\n", MAX_SECTOR_SIZE);
+	PRINTF("sector per block               : %u\n", sb.sector_per_block);
+	PRINTF("number of group                : %u\n", number_of_group);
+	PRINTF("inode per group                : %u\n", sb.inode_per_group);
+	PRINTF("block per group                : %u\n", sb.block_per_group);
 	PRINTF("\n");
 
 	if (create_root(disk, &sb, &gd) != EXT2_SUCCESS)
@@ -384,12 +384,17 @@ int create_root(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK * sb, EXT2_GROUP_DESCRIP
 	UINT32 inode_table_block = gd->start_block_of_inode_table;
 	UINT32 root_entry_block = sb->first_meta_bg;
 
+	printf("block_bitmap 	: %u\n", block_bitmap_block);
+	printf("inode_table 	: %u\n", inode_table_block);
+	printf("root_entry 		: %u\n", root_entry_block);
+
 	printf("1\n");
 
 	// set inode
 	read_block(disk, sb, block, inode_table_block);
 	printf("1-1\n");
 	INODE *root_inode = ((INODE *)block) + 1; // 2번 inode
+	printf("1-2\n");
 	root_inode->mode = 0x41A4; // directory, 644
 	root_inode->link_cnt = 2; // ".", ".."
 	root_inode->i_block[0] = root_entry_block;
