@@ -1,5 +1,3 @@
-#include <bitset>
-
 typedef struct
 {
 	char*	address;
@@ -61,24 +59,42 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 
 	write_block(disk, &sb, block, 0);
 
-	/* descriptor 채우기 */
+	/* 0번 descriptor 채우기 */
 	if (fill_descriptor_block(&gd, &sb, disk->number_of_sectors, disk->bytes_per_sector) != EXT2_SUCCESS)
 		return EXT2_ERROR;
 
-	gd_another_group = gd;
-
 	/* descriptor table 채우기 */
+
+	// 0번 block group과 달리, 1번~ block groups는 inode 예약 영역이 없고, 
+	// root block이 없어서 free count 다시 초기화
+	UINT32 descriptor_per_block = (1024 << sb.log_block_size) / 32;
+	int descriptor_block_index = 0;
+
+	gd_another_group = gd;
+	gd_another_group.free_inodes_count = sb.inode_per_group;
+	gd_another_group.free_blocks_count = sb.free_block_count / number_of_group;
+
 	ZeroMemory(block, sizeof(block));
 
 	for (j = 0; j < number_of_group; j++)
 	{
 		if (j == 0) memcpy(block + j * sizeof(gd), &gd, sizeof(gd));
 		else memcpy(block + j * sizeof(gd_another_group), &gd_another_group, sizeof(gd_another_group));
+
+		// 한 block 꽉 차면 다음 block으로 넘어감
+		if ((j + 1) % descriptor_per_block == 0) 
+		{
+			write_block(disk, &sb, block, 1 + descriptor_block_index++);
+			ZeroMemory(block, sizeof(block));
+		}
 	} 
 
-	// write_block 없음???
+	// 꽉 채우지 못한 마지막 block 써줌
+	if (number_of_group % descriptor_per_block != 0) 
+		write_block(disk, &sb, block, 1 + descriptor_block_index++);
 
-	/* block bitmap 채우기
+	/* block bitmap 채우기 */
+	/*
 	ZeroMemory((block), sizeof(block));
 	UINT32 number_of_descriptor_block = ( number_of_group * 32 + ( byte_per_block - 1 ) ) / byte_per_block;
 	
@@ -126,6 +142,10 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
     	gd.start_block_of_inode_bitmap = gd.start_block_of_block_bitmap + 1;
     	gd.start_block_of_inode_table = gd.start_block_of_inode_bitmap + 1;
 
+		gd_another_group.start_block_of_block_bitmap = sb.block_group_num * sb.block_per_group + number_of_descriptor_block + 1;
+    	gd_another_group.start_block_of_inode_bitmap = gd.start_block_of_block_bitmap + 1;
+    	gd_another_group.start_block_of_inode_table = gd.start_block_of_inode_bitmap + 1;
+
 		sb.first_meta_bg = gd.start_block_of_inode_table // inode table 시작 block
 							+ ((sb.inode_per_group + (sb.inode_per_group - 1)) >> (3 + sb.log_block_size)) // inode table이 차지하는 block 수
 							+ 3; // super block + block bitmap + inode bitmap
@@ -142,9 +162,19 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 		ZeroMemory(block, sizeof(block));
 		for (j = 0; j < number_of_group; j++)
 		{
-			memcpy(block + j * sizeof(gd), &gd, sizeof(gd));
-		}
-		write_block(disk, &sb, block, sb.block_per_group * gi + 1);
+			if (j == 0) memcpy(block + j * sizeof(gd), &gd, sizeof(gd));
+			else memcpy(block + j * sizeof(gd_another_group), &gd_another_group, sizeof(gd_another_group));
+
+			// 한 block 꽉 차면 다음 block으로 넘어감
+			if ((j + 1) % descriptor_per_block == 0) 
+			{
+				write_block(disk, &sb, block, sb.block_per_group * gi + 1 + descriptor_block_index++);
+				ZeroMemory(block, sizeof(block));
+			}
+		} 
+		// 꽉 채우지 못한 마지막 block 써줌
+		if (number_of_group % descriptor_per_block != 0) 
+			write_block(disk, &sb, block, sb.block_per_group * gi + 1 + descriptor_block_index++);
 
 		/* gi번째 group에 block bitmap 채우기 */
 		ZeroMemory(block, sizeof(block));
@@ -202,8 +232,8 @@ int fill_super_block(EXT2_SUPER_BLOCK * sb, SECTOR numberOfSectors, UINT32 bytes
 	sb->reserved_block_count = (UINT32)( (double)sb->block_count * (5./100.) );
 
 	// 전체 block group에서 free한 block, inode의 개수
-	sb->free_block_count = sb->block_count - number_of_used_block * number_of_group;
-    sb->free_inode_count = sb->max_inode_count;
+	sb->free_block_count = sb->block_count - number_of_used_block * number_of_group - 1; // 1 : root
+    sb->free_inode_count = sb->max_inode_count - 10; // 10 : 예약된 inode
 
 	// 첫 번째 블록
     sb->first_data_block = 0x00; 
@@ -290,8 +320,8 @@ int fill_descriptor_block(EXT2_GROUP_DESCRIPTOR * gd, EXT2_SUPER_BLOCK * sb, SEC
     gd->start_block_of_inode_bitmap = gd->start_block_of_block_bitmap + 1;
     gd->start_block_of_inode_table = gd->start_block_of_inode_bitmap + 1;
     
-	gd->free_blocks_count = sb->free_block_count / number_of_group;
-    gd->free_inodes_count = sb->inode_per_group;
+	gd->free_blocks_count = (sb->free_block_count + 1) / number_of_group ;
+    gd->free_inodes_count = sb->inode_per_group - 10;
     gd->directories_count = 0; // Block Group 내에 생성된 디렉토리 수
     
 	// 0
@@ -404,10 +434,12 @@ void change_block_bit(EXT2_FILESYSTEM *fs, UINT32 num)
 	UINT32 nr = num % fs->sb.block_per_group;
 	volatile void *addr = ((BYTE *)fs->disk->pdata) + fs->disk->bytes_per_sector * bitmap;
 
-	if (test_block_bit(nr, addr) == 1) {
+	if (test_block_bit(nr, addr) == 1) 
+	{
 		(((volatile unsigned int *)addr)[nr>>5]) &= (0xFFFFFFFF ^ (1UL << (nr & 31)));
 	}
-	else {
+	else 
+	{
 		(((volatile unsigned int *) addr)[nr >> 5]) |= (1UL << (nr & 31));
 	}
 }
