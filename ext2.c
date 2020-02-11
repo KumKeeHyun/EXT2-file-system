@@ -46,11 +46,14 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 	EXT2_GROUP_DESCRIPTOR gd;
 	EXT2_GROUP_DESCRIPTOR  gd_another_group;
 	
+	printf("1\n");
 	int i, gi, j;
 
 	/* super block 채우기 */
 	if (fill_super_block(&sb, disk->number_of_sectors, disk->bytes_per_sector, log_block_size) != EXT2_SUCCESS)
 		return EXT2_ERROR;
+
+	printf("2\n");
 	
 	UINT32 byte_per_block = 1024 << log_block_size;
     UINT32 number_of_group = disk->number_of_sectors / (sb.sector_per_block * sb.block_per_group);
@@ -64,9 +67,13 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 	if (write_block(disk, &sb, block, 0) == EXT2_ERROR)
 		return EXT2_ERROR; 
 	
+	printf("3\n");
+	
 	/* 0번 descriptor 채우기 */
 	if (fill_descriptor_block(&gd, &sb, disk->number_of_sectors, disk->bytes_per_sector) != EXT2_SUCCESS)
 		return EXT2_ERROR;
+
+	printf("4\n");
 
 	/* descriptor table 채우기 */
 
@@ -101,6 +108,8 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 		if (write_block(disk, &sb, block, 1 + descriptor_block_index) == EXT2_ERROR)
 				return EXT2_ERROR;
 	}
+
+	printf("5\n");
 
 	/* block bitmap 채우기 */
 	ZeroMemory((block), sizeof(block));
@@ -138,6 +147,8 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 
 	if (write_block(disk, &sb, block, gd.start_block_of_inode_bitmap) == EXT2_ERROR)
 		return EXT2_ERROR;
+
+	printf("6\n");
 
 	/* inode table 채우기 */
 	ZeroMemory(block, sizeof(block));
@@ -222,6 +233,8 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 
 	}
 
+	printf("7\n");
+
 	PRINTF("max inode count                : %u\n", sb.max_inode_count);
 	PRINTF("total block count              : %u\n", sb.block_count);
 	PRINTF("byte size of inode structure   : %u\n", sb.inode_size);
@@ -235,6 +248,8 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 		PRINTF("create_root() function error\n");
 		return EXT2_ERROR;
 	}
+
+	printf("8\n");
 
 	return EXT2_SUCCESS;
 }

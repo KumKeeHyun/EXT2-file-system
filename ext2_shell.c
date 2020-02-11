@@ -88,6 +88,15 @@ void fs_dumpDataBlockByNum(DISK_OPERATIONS * disk, SHELL_FS_OPERATIONS * fsOprs,
 	printFromP2P(start, end);
 
 }
+
+void dump_block(DISK_OPERATIONS * disk, EXT2_SUPER_BLOCK *sb, int num)
+{
+	char * start, *end;
+	start = ((DISK_MEMORY *)disk->pdata)->address + (num) * disk->bytes_per_sector * sb->sector_per_block + 1024;
+	end = start + disk->bytes_per_sector * sb->sector_per_block;
+	printFromP2P(start, end);
+}
+
 void printf_by_sel(DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, const SHELL_ENTRY* parent, SHELL_ENTRY* entry, const char* name, int sel, int num)
 {
 	switch (sel) {
