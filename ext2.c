@@ -200,13 +200,13 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 		/* gi번째 group에 inode bitmap 채우기 */
 		ZeroMemory(block, sizeof(block));
 
-		if (write_block(disk, &sb, block, gd.start_block_of_inode_bitmap) == EXT2_ERROR)
+		if (write_block(disk, &sb, block, sb.block_per_group * gi + gd.start_block_of_inode_bitmap) == EXT2_ERROR)
 			return EXT2_ERROR;
 
 		/* gi번째 group에 inode table 채우기 */
 		ZeroMemory(block, sizeof(block));
 
-		for (i = gd.start_block_of_inode_table; i < sb.first_meta_bg; i++)
+		for (i = sb.block_per_group * gi+ gd.start_block_of_inode_table; i < sb.block_per_group * gi + sb.first_meta_bg; i++)
 		{
 			if (write_block(disk, &sb, block, i) == EXT2_ERROR)
 			return EXT2_ERROR;
@@ -231,7 +231,6 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 		PRINTF("create_root() function error\n");
 		return EXT2_ERROR;
 	}
-	printf ("WTF\n");
 
 	return EXT2_SUCCESS;
 }
@@ -526,7 +525,7 @@ int get_inode_location(EXT2_FILESYSTEM *fs, UINT32 inode_num, EXT2_ENTRY_LOCATIO
 
 	UINT32 inode_per_group = fs->sb.inode_per_group;
 	UINT32 table_index = (inode_num - 1) % inode_per_group;
-	UINT32 inode_per_block = (1024 << fs->sb.log_block_size) / fs->sb.inode_per_group;
+	UINT32 inode_per_block = (1024 << fs->sb.log_block_size) / fs->sb.inode_size;
 	// 128말고 fs->sb.inode_size 하면 안될까
 	
 	loc->group = inode_num / inode_per_group;
@@ -716,11 +715,11 @@ int ext2_read_superblock(EXT2_FILESYSTEM* fs, EXT2_NODE* root)
 	memcpy(&fs->sb, block, sizeof(EXT2_SUPER_BLOCK));
 	read_disk_per_block(fs, 0, group_descriptor_block, block);
 	memcpy(&fs->gd, block, sizeof(EXT2_GROUP_DESCRIPTOR));
-	printf("gaga\n");
+	
 	/* super block인지 확인 */
 	if (fs->sb.magic_signature != 0xEF53) 
 		return EXT2_ERROR;
-	printf("gaga\n");
+	
 	/* root 디렉토리로 엔트리 채우기 */
 	ZeroMemory(root, sizeof(EXT2_NODE));
 	if (read_root_sector(fs, &root->entry) == EXT2_ERROR)
