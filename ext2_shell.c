@@ -92,8 +92,11 @@ void fs_dumpDataBlockByNum(DISK_OPERATIONS * disk, SHELL_FS_OPERATIONS * fsOprs,
 void dump_block(DISK_OPERATIONS * disk, EXT2_SUPER_BLOCK *sb, int num)
 {
 	char * start, *end;
-	start = ((DISK_MEMORY *)disk->pdata)->address + (num) * disk->bytes_per_sector * sb->sector_per_block + 1024;
-	end = start + disk->bytes_per_sector * sb->sector_per_block;
+	printf("%#x, %d\n", disk->pdata, num);
+	//start = ((DISK_MEMORY *)disk->pdata)->address + (num) * disk->bytes_per_sector * sb->sector_per_block + 1024;
+	//end = start + disk->bytes_per_sector * sb->sector_per_block;
+	start = (char *)disk->pdata + (num * 1024) + 1024;
+	end = start + 1024;
 	printFromP2P(start, end);
 }
 

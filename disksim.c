@@ -20,7 +20,7 @@ int disksim_init( SECTOR numberOfSectors, unsigned int bytesPerSector, DISK_OPER
 	if( disk == NULL )
 		return -1;
 
-	disk->pdata = malloc( sizeof( DISK_MEMORY ) ); 
+	disk->pdata = malloc( sizeof( DISK_MEMORY ) );
 	if( disk->pdata == NULL )
 	{
 		disksim_uninit( disk );

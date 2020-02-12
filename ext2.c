@@ -59,7 +59,8 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
     UINT32 number_of_group = disk->number_of_sectors / (sb.sector_per_block * sb.block_per_group);
 
 	const UINT32 sector_per_block = sb.sector_per_block;
-	BYTE block[MAX_SECTOR_SIZE * sector_per_block];
+	//BYTE block[MAX_SECTOR_SIZE * sector_per_block];
+	BYTE *block = (BYTE *)malloc(sizeof(BYTE) * MAX_SECTOR_SIZE * sector_per_block);
 
 	ZeroMemory(block, sizeof(block));
 	memcpy(block, &sb, sizeof(sb));
@@ -153,12 +154,15 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 
 	/* inode table 채우기 */
 	ZeroMemory(block, sizeof(block));
-
+	printFromP2P(block, block + 1023);
+	dump_block(disk, sb, gd.start_block_of_inode_table);
 	for (i = gd.start_block_of_inode_table; i < sb.first_meta_bg; i++)
 	{
 		if (write_block(disk, &sb, block, i) == EXT2_ERROR)
 			return EXT2_ERROR;
 	}
+	dump_block(disk, sb, gd.start_block_of_inode_table);
+	
 
 	/* 1번째 block group부터 차례로 super block ~ inode table 채움 */
 	for (gi = 1; gi < number_of_group; gi++)
@@ -383,21 +387,25 @@ int create_root(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK * sb, EXT2_GROUP_DESCRIP
 	UINT32 inode_table_block = gd->start_block_of_inode_table;
 	UINT32 root_entry_block = sb->first_meta_bg;
 
-	printf("block_bitmap 	: %u\n", block_bitmap_block);
-	printf("inode_table 	: %u\n", inode_table_block);
-	printf("root_entry 		: %u\n", root_entry_block);
+	printf("block_bitmap    : %u\n", block_bitmap_block);
+	printf("inode_table     : %u\n", inode_table_block);
+	printf("root_entry      : %u\n", root_entry_block);
+	printf("sector per block: %u\n", sb->sector_per_block);
+	printf("start disk      : %#x\n", disk->pdata);
 
 	printf("1\n");
 
 	// set inode
 	read_block(disk, sb, block, inode_table_block);
+	//dump_block(disk, sb, inode_table_block);
 	printf("1-1\n");
-	INODE *root_inode = ((INODE *)block) + 1; // 2번 inode
-	printf("1-2\n");
+	INODE *root_inode = (INODE *)block; // 2번 inode
+	root_inode++;
 	root_inode->mode = 0x41A4; // directory, 644
 	root_inode->link_cnt = 2; // ".", ".."
 	root_inode->i_block[0] = root_entry_block;
 	write_block(disk, sb, block, inode_table_block);
+	//dump_block(disk, sb, inode_table_block);
 
 	printf("2\n");
 
