@@ -20,7 +20,7 @@ int disksim_init( SECTOR numberOfSectors, unsigned int bytesPerSector, DISK_OPER
 	if( disk == NULL )
 		return -1;
 
-	disk->pdata = malloc( sizeof( DISK_MEMORY ) ); 
+	disk->pdata = malloc( sizeof( DISK_MEMORY ) );
 	if( disk->pdata == NULL )
 	{
 		disksim_uninit( disk );
@@ -72,7 +72,7 @@ int disksim_read( DISK_OPERATIONS* this, SECTOR sector, void* data )
 int disksim_write( DISK_OPERATIONS* this, SECTOR sector, const void* data )
 {
 	char* disk = ( ( DISK_MEMORY* )this->pdata )->address;
-
+	
 	if( sector < 0 || sector >= this->number_of_sectors )
 		return -1;
 
