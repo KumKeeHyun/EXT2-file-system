@@ -7,6 +7,9 @@
 
 #define MAX_SECTOR_SIZE 512
 
+#define LOG_BLOCK_SIZE 0 // 0 : 1KB, 1 : 2KB, 2 : 4KB
+#define SECTOR_PER_BLOCK 2 // byte_per_block / bytes_per_sector
+
 #define EXT2_NAME_LEN 255
 #define EXT2_N_BLOCKS 15
 #define	VOLUME_LABLE "EXT2 BY NC"
@@ -155,7 +158,7 @@ int ext2_create(EXT2_NODE* parent, char* entryName, EXT2_NODE* retEntry);
 int ext2_lookup(EXT2_NODE* parent, const char* entryName, EXT2_NODE* retEntry);
 
 UINT32 expand_block(EXT2_FILESYSTEM * , UINT32 );
-int fill_super_block(EXT2_SUPER_BLOCK * sb, SECTOR numberOfSectors, UINT32 bytesPerSector, UINT32 log_block_size);
+int fill_super_block(EXT2_SUPER_BLOCK * sb, SECTOR numberOfSectors, UINT32 bytesPerSector);
 int fill_descriptor_block(EXT2_GROUP_DESCRIPTOR * gd, EXT2_SUPER_BLOCK * sb, SECTOR numberOfSectors, UINT32 bytesPerSector);
 int create_root(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK * sb, EXT2_GROUP_DESCRIPTOR *gd);
 typedef int(*EXT2_NODE_ADD)(EXT2_FILESYSTEM*,void*, EXT2_NODE*);
