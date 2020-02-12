@@ -678,8 +678,46 @@ int read_root_sector(EXT2_FILESYSTEM* fs, EXT2_DIR_ENTRY *root)
 
 int ext2_create(EXT2_NODE* parent, char* entryName, EXT2_NODE* retEntry)
 {
+	if ((parent->fs->gd.free_inodes_count) == 0) return EXT2_ERROR;
+
+	UINT32 inode;
+	BYTE name[EXT2_NAME_LEN] = { 0, };
+	BYTE block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
+	int result;
+	BYTE name_length;
+
+	// 형식에 맞게 name 수정
+	strcpy(name, entryName);
+	if (format_name(parent->fs, name) == EXT2_ERROR) return EXT2_ERROR;
+
+	ZeroMemory(retEntry, sizeof(EXT2_NODE));
+
+	/* ret entry의 dir entry에 name 등록 */
+	memcpy(retEntry->entry.name, name, EXT2_NAME_LEN);
+
+	/* ret entry에 fs 등록 */
+	retEntry->fs = parent->fs;
+
+	/* ret entry의 dir entry에 inode 등록*/
+	inode = parent->entry.inode;
+	if ((result = lookup_entry(parent->fs, inode, name, retEntry)) == EXT2_SUCCESS) return EXT2_ERROR;
+	else if (result == -2) return EXT2_ERROR;
+
+	/* ret entry의 dir entry에 record_len, name_len, file_type 등록 */
+	name_length = strlen(name);
+	retEntry->entry.name_len = name_length;
+	retEntry->entry.file_type = EXT2_FT_REG_FILE;
+	retEntry->entry.record_len = ;
 	
-    return EXT2_SUCCESS;
+
+	/* parent 에 retEntry 삽입 */
+	if (insert_entry(inode, retEntry, 0) == EXT2_ERROR)return EXT2_ERROR;
+	
+	// 원래 써진 것 이상으로 해준 일
+	// directory entry에 record_len, name_len, file_type 넣어줘야함
+	// ret entry에 location 등록해야함.
+
+	return EXT2_SUCCESS;
 }
 
 
