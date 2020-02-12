@@ -9,6 +9,7 @@
 
 #define LOG_BLOCK_SIZE 0 // 0 : 1KB, 1 : 2KB, 2 : 4KB
 #define SECTOR_PER_BLOCK 2 // byte_per_block / bytes_per_sector
+#define BOOT_SECTOR_BASE 2
 
 #define EXT2_NAME_LEN 255
 #define EXT2_N_BLOCKS 15
@@ -163,5 +164,6 @@ int fill_descriptor_block(EXT2_GROUP_DESCRIPTOR * gd, EXT2_SUPER_BLOCK * sb, SEC
 int create_root(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK * sb, EXT2_GROUP_DESCRIPTOR *gd);
 typedef int(*EXT2_NODE_ADD)(EXT2_FILESYSTEM*,void*, EXT2_NODE*);
 void process_meta_data_for_block_used(EXT2_FILESYSTEM * fs, UINT32 inode_num);
+int ext2_read_superblock(EXT2_FILESYSTEM* fs, EXT2_NODE* root);
 
 #endif // _EXT2_H_

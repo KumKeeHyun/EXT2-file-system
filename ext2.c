@@ -17,7 +17,6 @@ UINT32 get_free_inode_number(EXT2_FILESYSTEM* fs);
 
 int write_block(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK* sb, SECTOR* block, unsigned int start_block)
 {
-	const int BOOT_SECTOR_BASE = 1024 / MAX_SECTOR_SIZE;
 	SECTOR sector_index = start_block * sb->sector_per_block + BOOT_SECTOR_BASE;
 
     for (int i = 0; i < sb->sector_per_block; i++)
@@ -32,7 +31,6 @@ int write_block(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK* sb, SECTOR* block, unsi
 
 int read_block(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK* sb, SECTOR* block, unsigned int start_block) 
 {
-	const int BOOT_SECTOR_BASE = 1024 / MAX_SECTOR_SIZE;
 	SECTOR sector_index = start_block * sb->sector_per_block + BOOT_SECTOR_BASE;
 
 	for (int i = 0; i < sb->sector_per_block; i++)
@@ -398,11 +396,6 @@ int create_root(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK * sb, EXT2_GROUP_DESCRIP
 
 	write_block(disk, sb, block, root_entry_block);
 
-	// set block_bitmap
-	ZeroMemory(block, sizeof(block));
-	//read_block(disk, sb, block, block_bitmap_block);
-	(((volatile unsigned int *) block)[root_entry_block >> 5]) |= (1UL << (root_entry_block & 31));
-	write_block(disk, sb, block, block_bitmap_block);
 	
 	// self debuging
 	/*
@@ -457,7 +450,6 @@ UINT32 expand_block(EXT2_FILESYSTEM * fs, UINT32 inode_num)
 
 int meta_read(EXT2_FILESYSTEM * fs, SECTOR group, SECTOR block, BYTE* sector)
 {
-	const SECTOR BOOT_SECTOR_BASE = 1024 / MAX_SECTOR_SIZE;
 	SECTOR real_index = BOOT_SECTOR_BASE + group * fs->sb.block_per_group + block;
 
 	return fs->disk->read_sector(fs->disk, real_index, sector);
@@ -500,7 +492,6 @@ void change_block_bit(EXT2_FILESYSTEM *fs, UINT32 num)
 
 int read_disk_per_block(EXT2_FILESYSTEM *fs, SECTOR group, SECTOR block, BYTE *block_buf) 
 {
-    const SECTOR BOOT_SECTOR_BASE = 1024 / MAX_SECTOR_SIZE;
     DISK_OPERATIONS* disk = fs->disk;
 	SECTOR sector_per_block = fs->sb.sector_per_block;
     SECTOR real_block_index = group * fs->sb.block_per_group + block;
@@ -508,7 +499,7 @@ int read_disk_per_block(EXT2_FILESYSTEM *fs, SECTOR group, SECTOR block, BYTE *b
 
     for (SECTOR i = 0; i < sector_per_block; i++) 
 	{
-        if ( disk->read_sector(fs->disk, real_sector_index + i, &block_buf[i * disk->bytes_per_sector]) == EXT2_ERROR)
+        if ( disk->read_sector(fs->disk, real_sector_index + i, &(block_buf[i * disk->bytes_per_sector])) == EXT2_ERROR)
 			return EXT2_ERROR;
     }
     return EXT2_SUCCESS;
@@ -516,7 +507,6 @@ int read_disk_per_block(EXT2_FILESYSTEM *fs, SECTOR group, SECTOR block, BYTE *b
 
 int write_disk_per_block(EXT2_FILESYSTEM *fs, SECTOR group, SECTOR block, BYTE *block_buf) 
 {
-    const SECTOR BOOT_SECTOR_BASE = 1024 / MAX_SECTOR_SIZE;
     DISK_OPERATIONS* disk = fs->disk;
 	SECTOR sector_per_block = fs->sb.sector_per_block;
     SECTOR real_block_index = group * fs->sb.block_per_group + block;
@@ -524,7 +514,7 @@ int write_disk_per_block(EXT2_FILESYSTEM *fs, SECTOR group, SECTOR block, BYTE *
 
     for (SECTOR i = 0; i < sector_per_block; i++) 
 	{
-        if ( disk->write_sector(fs->disk, real_sector_index + i, &block_buf[i * disk->bytes_per_sector]) == EXT2_ERROR)
+        if ( disk->write_sector(fs->disk, real_sector_index + i, &(block_buf[i * disk->bytes_per_sector])) == EXT2_ERROR)
 			return EXT2_ERROR;
     }
     return EXT2_SUCCESS;
@@ -536,11 +526,11 @@ int get_inode_location(EXT2_FILESYSTEM *fs, UINT32 inode_num, EXT2_ENTRY_LOCATIO
 
 	UINT32 inode_per_group = fs->sb.inode_per_group;
 	UINT32 table_index = (inode_num - 1) % inode_per_group;
-	UINT32 inode_per_block = (1024 << fs->sb.log_block_size) / 128;
+	UINT32 inode_per_block = (1024 << fs->sb.log_block_size) / fs->sb.inode_per_group;
 	// 128말고 fs->sb.inode_size 하면 안될까
 	
 	loc->group = inode_num / inode_per_group;
-	loc->block = (table_index / inode_per_block) + fs->gd.start_block_of_inode_table - 1;
+	loc->block = (table_index / inode_per_block) + fs->gd.start_block_of_inode_table;
 	loc->offset = table_index % inode_per_block;
 
 	return EXT2_SUCCESS;
@@ -713,7 +703,16 @@ int ext2_read_superblock(EXT2_FILESYSTEM* fs, EXT2_NODE* root)
 	}
 	
 	/* fs에 0번 block group의 super block, group descriptor table 복사 */
-	read_disk_per_block(fs, 0, super_block, block);
+	//read_block(fs, 0, super_block, block);
+
+	for (int i = 0; i < SECTOR_PER_BLOCK; i++)
+	{
+		if(fs->disk->read_sector(fs->disk, BOOT_SECTOR_BASE + i, &(block[i * fs->disk->bytes_per_sector]))== EXT2_ERROR) {
+			PRINTF("read_block() function error\n");
+			return EXT2_ERROR;
+		}
+	}
+
 	memcpy(&fs->sb, block, sizeof(EXT2_SUPER_BLOCK));
 	read_disk_per_block(fs, 0, group_descriptor_block, block);
 	memcpy(&fs->gd, block, sizeof(EXT2_GROUP_DESCRIPTOR));
