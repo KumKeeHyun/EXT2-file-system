@@ -32,7 +32,7 @@ int write_block(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK* sb, SECTOR* block, unsi
 
 int read_block(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK* sb, SECTOR* block, unsigned int start_block) 
 {
-	const int BOOT_SECTOR_BASE = 2;
+	const int BOOT_SECTOR_BASE = 1024 / MAX_SECTOR_SIZE;
 	SECTOR sector_index = start_block * sb->sector_per_block + BOOT_SECTOR_BASE;
 
 	for (int i = 0; i < sb->sector_per_block; i++)
@@ -71,15 +71,15 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 	int i, gi, j;
 
 	/* super block 채우기 */
-	if (fill_super_block(&sb, disk->number_of_sectors, disk->bytes_per_sector, log_block_size) != EXT2_SUCCESS)
+	if (fill_super_block(&sb, disk->number_of_sectors, disk->bytes_per_sector) != EXT2_SUCCESS)
 		return EXT2_ERROR;
 	
 	UINT32 byte_per_block = 1024 << log_block_size;
     UINT32 number_of_group = disk->number_of_sectors / (sb.sector_per_block * sb.block_per_group);
 
-	const UINT32 sector_per_block = sb.sector_per_block;
+	const UINT32 sector_per_block = SECTOR_PER_BLOCK;
 	//BYTE block[MAX_SECTOR_SIZE * sector_per_block];
-	BYTE block[MAX_SECTOR_SIZE * 2];
+	BYTE block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
 
 	ZeroMemory(block, sizeof(block));
 	memcpy(block, &sb, sizeof(sb));
@@ -103,7 +103,7 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 	gd_another_group.free_blocks_count = sb.free_block_count / number_of_group;
 
 	ZeroMemory(block, sizeof(block));
-
+	
 	for (j = 0; j < number_of_group; j++)
 	{
 		if (j == 0) memcpy(block + j * sizeof(gd), &gd, sizeof(gd));
@@ -128,7 +128,7 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 	/* block bitmap 채우기 */
 	ZeroMemory((block), sizeof(block));
 	//printf("first_meta_bg = %u\n", sb.first_meta_bg);
-	for (unsigned int i = 0; i < sb.first_meta_bg; i++) {
+	for (unsigned int i = 0; i < sb.first_meta_bg+1; i++) {
 		(((volatile unsigned int *) block)[i >> 5]) |= (1UL << (i & 31));
 	}
 	if (write_block(disk, &sb, block, gd.start_block_of_block_bitmap) == EXT2_ERROR)
@@ -233,19 +233,19 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 		PRINTF("create_root() function error\n");
 		return EXT2_ERROR;
 	}
-
+	printf ("WTF\n");
 
 	return EXT2_SUCCESS;
 }
 
-int fill_super_block(EXT2_SUPER_BLOCK * sb, SECTOR numberOfSectors, UINT32 bytesPerSector, UINT32 log_block_size)
+int fill_super_block(EXT2_SUPER_BLOCK * sb, SECTOR numberOfSectors, UINT32 bytesPerSector)
 {
-	UINT32 byte_per_block = 1024 << log_block_size;
+	UINT32 byte_per_block = 1024 << LOG_BLOCK_SIZE;
     UINT32 block_per_group = byte_per_block << 3;
     BYTE sector_per_block = byte_per_block / bytesPerSector;
     UINT32 number_of_group = (numberOfSectors + (sector_per_block * block_per_group - 1)) / (sector_per_block * block_per_group);
 	UINT32 number_of_descriptor_block = ( number_of_group * 32 + ( byte_per_block - 1 ) ) / byte_per_block; 
-	UINT32 inode_per_block = 1 << (3 + log_block_size);
+	UINT32 inode_per_block = 1 << (3 + LOG_BLOCK_SIZE);
 	UINT32 max_inode_count = numberOfSectors / sector_per_block / 2;
 	UINT32 inode_per_group = max_inode_count / number_of_group;
 	UINT32 number_of_inode_block = (inode_per_group + (inode_per_block - 1)) / inode_per_block; // 한 그룹에서 inode table이 차지하는 block 수
@@ -263,7 +263,7 @@ int fill_super_block(EXT2_SUPER_BLOCK * sb, SECTOR numberOfSectors, UINT32 bytes
 
 	// 첫 번째 블록
     sb->first_data_block = 0x00; 
-    sb->log_block_size = log_block_size; // 0, 1, 2
+    sb->log_block_size = LOG_BLOCK_SIZE; // 0, 1, 2
 
     sb->log_fragmentation_size = 2;	// 0, 1, 2 (2 - 임시)
 
@@ -357,9 +357,7 @@ int fill_descriptor_block(EXT2_GROUP_DESCRIPTOR * gd, EXT2_SUPER_BLOCK * sb, SEC
 int create_root(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK * sb, EXT2_GROUP_DESCRIPTOR *gd)
 {
 	const BYTE sector_per_block = sb->sector_per_block;
-	BYTE block[MAX_SECTOR_SIZE * 2];
-	BYTE block2[MAX_SECTOR_SIZE * 2];
-	BYTE *block_ptr;
+	BYTE block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
 
 	UINT32 block_bitmap_block = gd->start_block_of_block_bitmap;
 	UINT32 inode_table_block = gd->start_block_of_inode_table;
@@ -377,20 +375,7 @@ int create_root(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK * sb, EXT2_GROUP_DESCRIP
 	root_inode->link_cnt = 2; // ".", ".."
 	root_inode->i_block[0] = root_entry_block;
 	write_block(disk, sb, block, inode_table_block);
-	printf("%d\n", inode_table_block);
 	//dump_block(disk, sb, inode_table_block);
-	
-	ZeroMemory(block2, sizeof(block2));
-	read_block(disk, sb, block2, inode_table_block);
-	block_ptr = &block2;
-	printf("\n #%s block : %d\n", "inode", sb->first_meta_bg);
-	for (int i = 0; i < 1024; i++) {
-		if (i % 16 == 0)
-			printf("\n");
-		printf("%02X ", *block_ptr);
-		block_ptr++;
-	}
-	printf("\n\n");
 
 	// set dir_entry
 	// "." entry
@@ -413,27 +398,16 @@ int create_root(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK * sb, EXT2_GROUP_DESCRIP
 
 	write_block(disk, sb, block, root_entry_block);
 
-	ZeroMemory(block2, sizeof(block2));
-	read_block(disk, sb, block2, root_entry_block);
-	block_ptr = &block2;
-	printf("\n #%s block : %d\n", "entry", root_entry_block);
-	for (int i = 0; i < 1024; i++) {
-		if (i % 16 == 0)
-			printf("\n");
-		printf("%02X ", *block_ptr);
-		block_ptr++;
-	}
-	printf("\n\n");
-
 	// set block_bitmap
-	read_block(disk, sb, block, block_bitmap_block);
+	ZeroMemory(block, sizeof(block));
+	//read_block(disk, sb, block, block_bitmap_block);
 	(((volatile unsigned int *) block)[root_entry_block >> 5]) |= (1UL << (root_entry_block & 31));
 	write_block(disk, sb, block, block_bitmap_block);
-
 	
-	ZeroMemory(block2, sizeof(block2));
-	read_block(disk, sb, block2, block_bitmap_block);
-	block_ptr = &block2;
+	// self debuging
+	/*
+	ZeroMemory(block, sizeof(block));
+	block_ptr = &block;
 	printf("\n #%s block : %d\n", "bbm", block_bitmap_block);
 	for (int i = 0; i < 1024; i++) {
 		if (i % 16 == 0)
@@ -442,7 +416,17 @@ int create_root(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK * sb, EXT2_GROUP_DESCRIP
 		block_ptr++;
 	}
 	printf("\n\n");
-
+	read_block(disk, sb, block, block_bitmap_block);
+	block_ptr = &block;
+	printf("\n #%s block : %d\n", "bbm", block_bitmap_block);
+	for (int i = 0; i < 1024; i++) {
+		if (i % 16 == 0)
+			printf("\n");
+		printf("%02X ", *block_ptr);
+		block_ptr++;
+	}
+	printf("\n\n");
+	*/
 
 	return EXT2_SUCCESS;
 }
@@ -567,7 +551,7 @@ int get_inode(EXT2_FILESYSTEM* fs, const UINT32 inode_num, INODE *inodeBuffer) {
 		return EXT2_ERROR;
 
 	const BYTE sector_per_block = fs->sb.sector_per_block;
-	BYTE block[MAX_SECTOR_SIZE * 2];
+	BYTE block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
 	EXT2_ENTRY_LOCATION loc;
 
 	if (get_inode_location(fs, inode_num, &loc) == EXT2_ERROR)
@@ -718,7 +702,7 @@ int ext2_read_superblock(EXT2_FILESYSTEM* fs, EXT2_NODE* root)
 {
 	INT result;
 	const UINT32 sector_per_block = fs->sb.sector_per_block;
-	BYTE block[MAX_SECTOR_SIZE * 2];
+	BYTE block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
 	UINT32 super_block = 0; // super block 시작 block
 	UINT32 group_descriptor_block = 1; // group descriptor table 시작 block
 
@@ -727,17 +711,17 @@ int ext2_read_superblock(EXT2_FILESYSTEM* fs, EXT2_NODE* root)
 		WARNING("DISK OPERATIONS : %p\nEXT2_FILESYSTEM : %p\n", fs, fs->disk);
 		return EXT2_ERROR;
 	}
-
+	
 	/* fs에 0번 block group의 super block, group descriptor table 복사 */
 	read_disk_per_block(fs, 0, super_block, block);
 	memcpy(&fs->sb, block, sizeof(EXT2_SUPER_BLOCK));
 	read_disk_per_block(fs, 0, group_descriptor_block, block);
 	memcpy(&fs->gd, block, sizeof(EXT2_GROUP_DESCRIPTOR));
-
+	printf("gaga\n");
 	/* super block인지 확인 */
 	if (fs->sb.magic_signature != 0xEF53) 
 		return EXT2_ERROR;
-
+	printf("gaga\n");
 	/* root 디렉토리로 엔트리 채우기 */
 	ZeroMemory(root, sizeof(EXT2_NODE));
 	if (read_root_sector(fs, &root->entry) == EXT2_ERROR)

@@ -409,7 +409,7 @@ int shell_cmd_format( int argc, char* argv[] )
 	}
 
 	result = g_fs.format( &g_disk, param );
-
+	printf("WTF3\n");
 	if( result < 0 )
 	{
 		printf( "%s formatting is failed\n", g_fs.name );
