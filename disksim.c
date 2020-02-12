@@ -72,7 +72,7 @@ int disksim_read( DISK_OPERATIONS* this, SECTOR sector, void* data )
 int disksim_write( DISK_OPERATIONS* this, SECTOR sector, const void* data )
 {
 	char* disk = ( ( DISK_MEMORY* )this->pdata )->address;
-
+	
 	if( sector < 0 || sector >= this->number_of_sectors )
 		return -1;
 
