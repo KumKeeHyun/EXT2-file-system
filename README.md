@@ -2,6 +2,7 @@
 + [EXT2 File System](#EXT2FileSystem)
 + [How to use](#Howtouse)
 + [Contributors](#Contributors)
++ [Run GDBGUI](#RunGDBGUI)
 
 # BLANK 1
 
@@ -62,6 +63,35 @@ blank
 
 
 ## Contributors
+
+
+## Run GDBGUI <a name="RunGDBGUI"></a>
+
+1. compile using '-g' option
+
+```
+gcc -g -o file_name files
+```
+
+2. start gdb server
+
+```
+gdbserver localhost:port /file_path/file_name
+```
+
+3. another terminal
+
+```
+gdbgui -g gdb-multiarch
+```
+
+4. in gdbgui window
+
+```
+file /file_path/file_name
+
+tartget remote:port
+```
 
 
 ## 연습장
