@@ -213,11 +213,6 @@ int adder(EXT2_FILESYSTEM* fs, void* list, EXT2_NODE* entry)
 	SHELL_ENTRY         newEntry;
 
 	ext2_entry_to_shell_entry(fs, entry, &newEntry);
-
-	printf("entry name : ");
-	ext2_print_entry_name((EXT2_NODE *)(newEntry.pdata));
-	printf("\n");
-
 	add_entry_list(entryList, &newEntry);
 
 	return EXT2_SUCCESS;
@@ -355,12 +350,11 @@ int is_exist(DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, const SHELL_ENT
 
 	while (current)
 	{
-		if (my_strnicmp((char*)current->entry.name, name, 12) == 0)
+		if (strcmp((char*)current->entry.name, name) == 0)
 		{
 			release_entry_list(&list);
 			return EXT2_ERROR;
 		}
-
 		current = current->next;
 	}
 
@@ -377,12 +371,18 @@ int fs_mkdir(DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, const SHELL_ENT
 
 	ext2 = (EXT2_FILESYSTEM*)fsOprs->pdata;
 
-	if (is_exist(disk, fsOprs, parent, name))
+	if (is_exist(disk, fsOprs, parent, name)) {
+		printf("error : %s already exist\n", name);
 		return EXT2_ERROR;
+	}
+		
 
 	shell_entry_to_ext2_entry(parent, &EXT2_Parent);
 
 	result = ext2_mkdir(&EXT2_Parent, name, &EXT2_Entry);
+	if (result == EXT2_ERROR) {
+		printf("ext2_mkdir error\n");
+	}
 
 	ext2_entry_to_shell_entry(ext2, &EXT2_Entry, retEntry);
 
