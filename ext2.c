@@ -598,14 +598,12 @@ void upper_string(char* str, int length)
 	}
 }
 
+// name의 format을 검사하는 함수로 바꿈
 int format_name(EXT2_FILESYSTEM* fs, char* name)
 {
 	UINT32	i, length;
-	UINT32	extender = 0, nameLength = 0;
+	UINT32	extender = 0;
 	UINT32	extenderCurrent = 8;
-	BYTE	regularName[EXT2_NAME_LEN];
-
-	memset(regularName, 0, sizeof(regularName));
 	length = strlen(name);
 
 	if (strcmp(name, "..") == 0 | strcmp(name, ".") == 0)
@@ -625,22 +623,14 @@ int format_name(EXT2_FILESYSTEM* fs, char* name)
 					return EXT2_ERROR;
 				extender = 1;
 			}
-			else if (isdigit(name[i]) || isalpha(name[i]))
-			{
-				if (extender)
-					regularName[extenderCurrent++] = name[i];
-				else
-					regularName[nameLength++] = name[i];
-			}
 			else
 				return EXT2_ERROR;
 		}
 
-		if (nameLength > EXT2_NAME_LEN || nameLength == 0 || extenderCurrent > 11)
+		if (length > EXT2_NAME_LEN || length == 0 || extenderCurrent > 11)
 			return EXT2_ERROR;
 	}
 
-	memcpy(name, regularName, sizeof(regularName));
 	return EXT2_SUCCESS;
 }
 
@@ -672,6 +662,7 @@ int read_root_sector(EXT2_FILESYSTEM* fs, EXT2_DIR_ENTRY *root)
 	memcpy(root->name, VOLUME_LABLE, root->name_len);
 	root->record_len = sizeof(EXT2_DIR_ENTRY) - EXT2_NAME_LEN + root->name_len;
 
+	printf("root record len : %u\n", root->record_len);
 	return EXT2_SUCCESS;
 }
 
@@ -753,15 +744,15 @@ int ext2_read_dir(EXT2_NODE* dir, EXT2_NODE_ADD adder, void* list)
 	UINT32 blk_idx = 0, block_num;
 
 	get_inode(dir->fs, dir->entry.inode, &inode_buf);
+
 	while (inode_buf.i_block[blk_idx] != 0)
 	{
 		block_num = inode_buf.i_block[blk_idx];
+
 		get_block_location(dir->fs, block_num, &loc);
 		read_disk_per_block(dir->fs, loc.group, loc.block, block);
 
-		if (read_dir_from_block(dir->fs, &loc, block, adder, list))
-			break;
-
+		read_dir_from_block(dir->fs, &loc, block, adder, list);
 		blk_idx++;
 	}
 
@@ -770,22 +761,25 @@ int ext2_read_dir(EXT2_NODE* dir, EXT2_NODE_ADD adder, void* list)
 
 int read_dir_from_block(EXT2_FILESYSTEM* fs, EXT2_ENTRY_LOCATION *loc, BYTE* block, EXT2_NODE_ADD adder, void* list)
 {
-	BYTE *block_end = block + (1024 << fs->sb.log_block_size);
 	EXT2_NODE node;
-	ZeroMemory(&node, sizeof(EXT2_NODE));
-	
+	EXT2_DIR_ENTRY *entry;
 	BYTE *block_offset = block;
-	EXT2_DIR_ENTRY *entry = (EXT2_DIR_ENTRY *)block_offset;
+	BYTE *block_end = block_offset + (1024 << fs->sb.log_block_size);
+	UINT32 real_record_len;
 
-	while (block_offset != block_end) {
+	while (block_offset != block_end)
+	{
+		entry = (EXT2_DIR_ENTRY *)block_offset;
+		block_offset += entry->record_len;
+
 		ZeroMemory(&node, sizeof(EXT2_NODE));
 		node.fs = fs;
 		node.location = *loc;
-		memcpy(&(node.entry), entry, entry->record_len);
-		adder(fs, list, &node);
 
-		block_offset += entry->record_len;
-		entry = (EXT2_DIR_ENTRY *)block_offset;
+		real_record_len = entry->name_len + 8; // 8은 dir_entry에서 name 필드를 제외한 byte 크기
+		memcpy(&(node.entry), entry, real_record_len);
+		
+		adder(fs, list, &node);
 	}
 	
 	return 0;
@@ -803,4 +797,11 @@ int ext2_mkdir(const EXT2_NODE* parent, const char* entryName, EXT2_NODE* retEnt
 {
 	
 	return EXT2_SUCCESS;
+}
+
+void ext2_print_entry_name(EXT2_NODE *entry) 
+{
+	BYTE name_buf[EXT2_NAME_LEN + 1] = {0, };
+	memcpy(name_buf, entry->entry.name, entry->entry.name_len);
+	printf("%s", name_buf);
 }

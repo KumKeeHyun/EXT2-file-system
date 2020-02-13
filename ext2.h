@@ -162,9 +162,10 @@ typedef int(*EXT2_NODE_ADD)(EXT2_FILESYSTEM*,void*, EXT2_NODE*);
 
 int ext2_read_superblock(EXT2_FILESYSTEM* fs, EXT2_NODE* root);
 int ext2_read_dir(EXT2_NODE* dir, EXT2_NODE_ADD adder, void* list);
+void ext2_print_entry_name(EXT2_NODE *entry);
 
 int read_dir_from_block(EXT2_FILESYSTEM* fs, EXT2_ENTRY_LOCATION *loc, BYTE* block, EXT2_NODE_ADD adder, void* list);
-
+int format_name(EXT2_FILESYSTEM* fs, char* name);
 
 UINT32 expand_block(EXT2_FILESYSTEM * , UINT32 );
 int fill_super_block(EXT2_SUPER_BLOCK * sb, SECTOR numberOfSectors, UINT32 bytesPerSector);

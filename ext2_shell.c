@@ -190,7 +190,7 @@ int fs_mount(DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, SHELL_ENTRY* ro
 	printf("%s", ext2_entry.entry.name);
 	ext2_entry_to_shell_entry(fs, &ext2_entry, root);
 
-	printf("3\n");
+	EXT2_NODE *debug = (EXT2_NODE *)root->pdata;
 
 	return result;
 }
@@ -213,6 +213,10 @@ int adder(EXT2_FILESYSTEM* fs, void* list, EXT2_NODE* entry)
 	SHELL_ENTRY         newEntry;
 
 	ext2_entry_to_shell_entry(fs, entry, &newEntry);
+
+	printf("entry name : ");
+	ext2_print_entry_name((EXT2_NODE *)(newEntry.pdata));
+	printf("\n");
 
 	add_entry_list(entryList, &newEntry);
 
@@ -263,23 +267,19 @@ int ext2_entry_to_shell_entry(EXT2_FILESYSTEM* fs, const EXT2_NODE* ext2_entry, 
 	INODE inodeBuffer;
 	BYTE* str = "/";
 
+	// if (format_name(fs, ext2_entry->entry.name) == EXT2_ERROR){
+	// 	printf("naming format wrong\n");
+	// 	return EXT2_ERROR;
+	// }
+
 	ZeroMemory(shell_entry, sizeof(SHELL_ENTRY));
 
 	int inode = ext2_entry->entry.inode;
 	int result = get_inode(fs, inode, &inodeBuffer);
 
-	/*
-	if (ext2_entry->entry.name[0] != '.' && inode == 2);
-	else {
-		str = shell_entry->name;
-		str = my_strncpy(str, ext2_entry->entry.name, 8);
-		if (ext2_entry->entry.name[8] != 0x20)
-		{
-			str = my_strncpy(str, ".", 1);
-			str = my_strncpy(str, &ext2_entry->entry.name[8], 3);
-		}
-	}
-	*/
+	memcpy(shell_entry->name, ext2_entry->entry.name, ext2_entry->entry.name_len);
+	shell_entry->name[ext2_entry->entry.name_len] = '\0';
+	
 	if (FILE_TYPE_DIR & inodeBuffer.mode)
 		shell_entry->isDirectory = 1;
 	else
