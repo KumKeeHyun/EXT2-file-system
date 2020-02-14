@@ -81,6 +81,8 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 	//BYTE block[MAX_SECTOR_SIZE * sector_per_block];
 	BYTE block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
 
+	BYTE *block_ptr = block;
+	printf ("%p\n",block_ptr);
 	ZeroMemory(block, sizeof(block));
 	memcpy(block, &sb, sizeof(sb));
 
@@ -622,7 +624,7 @@ int format_name(EXT2_FILESYSTEM* fs, char* name)
 
 int lookup_entry(EXT2_FILESYSTEM* fs, const int inode_num, const char* name, EXT2_NODE* retEntry)
 {
-	find_entry_on_root(fs, inode_num, name, retEntry);
+	return find_entry_on_root(fs, inode_num, name, retEntry);
 }
 
 int find_entry_at_block(const BYTE* block, const BYTE* formattedName, EXT2_DIR_ENTRY* dir_entry, UINT32* offset)
@@ -639,17 +641,17 @@ int find_entry_at_block(const BYTE* block, const BYTE* formattedName, EXT2_DIR_E
 			if ( get_real_record_len(entry) < entry->record_len)
 			{
 				*offset = entry_offset;
-				dir_entry = entry;
+				memcpy(dir_entry, entry, entry->record_len);
 				return EXT2_SUCCESS;
 			}
 		}
 		else
 		{
 			// formattedName file이 있는 경우
-			if (memcmp(formattedName, entry->name, EXT2_NAME_LEN) == 0)
+			if (memcmp(formattedName, entry->name, entry->name_len) == 0)
 			{
 				*offset = entry_offset;
-				dir_entry = entry;
+				memcpy(dir_entry, entry, entry->record_len);
 				return EXT2_SUCCESS;
 			}
 		}
@@ -658,7 +660,7 @@ int find_entry_at_block(const BYTE* block, const BYTE* formattedName, EXT2_DIR_E
 	}
 
 	*offset = entry_offset;
-	dir_entry = entry;
+	memcpy(dir_entry, entry, entry->record_len);
 
 	// 빈자리가 블럭의 마지막 entry인 경우
 	if (formattedName == NULL) return -2;
@@ -693,8 +695,12 @@ int find_entry_on_root(EXT2_FILESYSTEM* fs, const int inode_num, char* formatted
 		if (i_block_index < 12 && inode.i_block[i_block_index])
 		{
 			result = get_entry_at_block(block, formattedName, inode.i_block[i_block_index], ret);
-			if (result = EXT2_ERROR) continue;
-			else return result;
+			if (result == EXT2_ERROR) continue;
+			else
+			{
+				printf("'%s' file is already exist.\n", formattedName);
+				return result;
+			} 
 		}
 		else if (i_block_index >= 12 && inode.i_block[i_block_index])
 		{
@@ -767,21 +773,14 @@ int get_entry_at_block(const unsigned char *block, const unsigned char *formatte
 	// success 나오면 파일 있다는 거 -> find_entry_on_root 도 success
 	// -1 나오면 다음 블록도 뒤져야댐 -> for문 계속 돌려
 	// 왜냐면 마지막 엔트리까지 닿았다가 앞에 엔트리들 다삭제된 걸 수도 있으니깐.
+	// -2 나오면 name에 null넣은 경우만 해당하는데, 빈자리가 블럭 마지막 디렉토리 엔트리에 있다는 의미.
 
-	if (result == EXT2_ERROR) 
-	{
-		return EXT2_ERROR;
-	}
-	else
-	{
-		memcpy(&ret->entry, &entry, sizeof(entry));
+	memcpy(&ret->entry, &entry, sizeof(entry));
+	get_block_location(ret->fs, block_num, &ret->location);
 
-		ret->location.group = block_num / block_per_group; 
-		ret->location.block = block_num - ret->location.group * block_per_group;
-		ret->location.offset = offset;
-	}
-
-	return EXT2_SUCCESS;
+	ret->location.offset = offset;
+	
+	return result;
 }
 
 int find_entry_on_data(EXT2_FILESYSTEM* fs, INODE first, const BYTE* formattedName, EXT2_NODE* ret)
