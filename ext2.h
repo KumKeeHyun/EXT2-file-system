@@ -165,5 +165,6 @@ int create_root(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK * sb, EXT2_GROUP_DESCRIP
 typedef int(*EXT2_NODE_ADD)(EXT2_FILESYSTEM*,void*, EXT2_NODE*);
 void process_meta_data_for_block_used(EXT2_FILESYSTEM * fs, UINT32 inode_num);
 int ext2_read_superblock(EXT2_FILESYSTEM* fs, EXT2_NODE* root);
+UINT16 get_real_record_len(EXT2_DIR_ENTRY* entry) ;
 
 #endif // _EXT2_H_

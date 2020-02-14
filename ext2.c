@@ -958,9 +958,9 @@ int ext2_mkdir(const EXT2_NODE* parent, const char* entryName, EXT2_NODE* retEnt
 	return EXT2_SUCCESS;
 }
 
-UINT16 get_real_record_len(EXT2_DIR_ENTRY* entry)  //(EXT2_NODE* parent, EXT2_DIR_ENTRY front_entry, EXT2_DIR_ENTRY ret_entry)
+UINT16 get_real_record_len(EXT2_DIR_ENTRY* entry) 
 {
-	record_len = entry->record_len + 8;
+	UINT16 record_len = entry->record_len + 8;
 
 	return record_len;
 } 
