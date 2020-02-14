@@ -433,9 +433,46 @@ void process_meta_data_for_inode_used(EXT2_NODE * retEntry, UINT32 inode_num, in
 
 int insert_entry(UINT32 inode_num, EXT2_NODE * retEntry)
 {
-	BYTE block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
+	EXT2_NODE new_entry;
 
-	return EXT2_ERROR;
+	// 새로운 entry가 들어가는 위치의 바로 앞에 있는 entry 위치정보를 new_entry->loc에 저장
+	if (lookup_entry(retEntry->fs, inode_num, NULL, &new_entry) == EXT2_SUCCESS) 
+	{
+		retEntry->location = new_entry.location;
+		set_entry(retEntry->fs, &new_entry.location, &retEntry->entry);
+	}
+	else // lookup_entry에서 빈자리 못찾았으면 오류
+	{
+		return EXT2_ERROR;
+	}
+
+	return EXT2_SUCCESS;
+}
+
+int set_entry(EXT2_FILESYSTEM * fs, EXT2_ENTRY_LOCATION *loc, EXT2_DIR_ENTRY *new_entry)
+{
+	BYTE block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
+	BYTE *block_offset;
+	EXT2_DIR_ENTRY *entry;
+	UINT32 new_record_len, next_entry_offset;
+	
+	read_disk_per_block(fs, loc->group, loc->block, block);
+
+	block_offset = block + loc->offset;
+
+	// entry의 record_len 수정
+	entry = (EXT2_DIR_ENTRY *)block_offset;
+	next_entry_offset = loc->offset + entry->record_len;
+	new_record_len = entry->record_len - GET_RECORD_LEN(entry);
+	entry->record_len = GET_RECORD_LEN(entry);
+
+	// new entry의 record_len 수정한 뒤에 블럭에 추가
+	block_offset += entry->record_len;
+	entry = (EXT2_DIR_ENTRY *)block_offset;
+	new_entry->record_len = new_record_len;
+	memcpy(entry, new_entry, GET_RECORD_LEN(new_entry));
+
+	write_disk_per_block(fs, loc->group, loc->block, block);
 }
 
 UINT32 get_available_data_block(EXT2_FILESYSTEM * fs, UINT32 inode_num)
@@ -629,7 +666,9 @@ int lookup_entry(EXT2_FILESYSTEM* fs, const int inode_num, const char* name, EXT
 
 int find_entry_at_block(const BYTE* block, const BYTE* formattedName, EXT2_DIR_ENTRY* dir_entry, UINT32* offset)
 {
-	EXT2_DIR_ENTRY* entry = (EXT2_DIR_ENTRY *) block;
+	BYTE *block_offset = block;
+	EXT2_DIR_ENTRY* entry = (EXT2_DIR_ENTRY *)block_offset;
+
 	UINT32 byte_per_block = 1024 << LOG_BLOCK_SIZE;
 	UINT16 entry_offset = 0;
 
@@ -638,10 +677,10 @@ int find_entry_at_block(const BYTE* block, const BYTE* formattedName, EXT2_DIR_E
 		// 중간에 빈자리 찾을 때
 		if (formattedName == NULL)
 		{
-			if ( get_real_record_len(entry) < entry->record_len)
+			if ( GET_RECORD_LEN(entry) < entry->record_len)
 			{
 				*offset = entry_offset;
-				memcpy(dir_entry, entry, entry->record_len);
+				memcpy(dir_entry, entry, GET_RECORD_LEN(entry));
 				return EXT2_SUCCESS;
 			}
 		}
@@ -651,16 +690,17 @@ int find_entry_at_block(const BYTE* block, const BYTE* formattedName, EXT2_DIR_E
 			if (memcmp(formattedName, entry->name, entry->name_len) == 0)
 			{
 				*offset = entry_offset;
-				memcpy(dir_entry, entry, entry->record_len);
+				memcpy(dir_entry, entry, GET_RECORD_LEN(entry));
 				return EXT2_SUCCESS;
 			}
 		}
-		entry_offset += entry->record_len; 
-		entry += entry->record_len;
+		entry_offset += entry->record_len;
+		block_offset += entry->record_len;
+		entry = (EXT2_DIR_ENTRY *)block_offset;
 	}
 
 	*offset = entry_offset;
-	memcpy(dir_entry, entry, entry->record_len);
+	memcpy(dir_entry, entry, GET_RECORD_LEN(entry));
 
 	// 빈자리가 블럭의 마지막 entry인 경우
 	if (formattedName == NULL) return -2;
@@ -766,16 +806,13 @@ int get_entry_at_block(const unsigned char *block, const unsigned char *formatte
 {
 	int result;
 	UINT32 offset;
-	EXT2_DIR_ENTRY entry;
-	UINT32 block_per_group = ret->fs->sb.block_per_group;// ret, fs등록 fs_create에서 해줘서 괜찮지 않을랑가
 
-	result = find_entry_at_block(block, formattedName, &entry, &offset);
+	result = find_entry_at_block(block, formattedName, &ret->entry, &offset);
 	// success 나오면 파일 있다는 거 -> find_entry_on_root 도 success
 	// -1 나오면 다음 블록도 뒤져야댐 -> for문 계속 돌려
 	// 왜냐면 마지막 엔트리까지 닿았다가 앞에 엔트리들 다삭제된 걸 수도 있으니깐.
 	// -2 나오면 name에 null넣은 경우만 해당하는데, 빈자리가 블럭 마지막 디렉토리 엔트리에 있다는 의미.
 
-	memcpy(&ret->entry, &entry, sizeof(entry));
 	get_block_location(ret->fs, block_num, &ret->location);
 
 	ret->location.offset = offset;
@@ -819,9 +856,6 @@ int ext2_create(EXT2_NODE* parent, char* entryName, EXT2_NODE* retEntry)
 
 	ZeroMemory(retEntry, sizeof(EXT2_NODE));
 
-	/* ret entry의 dir entry에 name 등록 */
-	memcpy(retEntry->entry.name, name, EXT2_NAME_LEN);
-
 	/* ret entry에 fs 등록 */
 	retEntry->fs = parent->fs;
 
@@ -833,11 +867,12 @@ int ext2_create(EXT2_NODE* parent, char* entryName, EXT2_NODE* retEntry)
 	/* ret entry의 dir entry에 name_len, file_type, record_len 등록 */
 	name_length = strlen(name);
 	retEntry->entry.name_len = name_length;
-
-	// retEntry->entry.record_len = ;
+	memcpy(retEntry->entry.name, name, name_length);
+	retEntry->entry.file_type = EXT2_FT_REG_FILE;
+	retEntry->entry.record_len = GET_RECORD_LEN(&(retEntry->entry));
 
 	/* parent 에 retEntry 삽입 */
-	if (insert_entry(inode, retEntry, 0) == EXT2_ERROR)return EXT2_ERROR;
+	if (insert_entry(inode, retEntry) == EXT2_ERROR)return EXT2_ERROR;
 	
 	// 원래 써진 것 이상으로 해줘야할 일
 	// directory entry에 record_len, name_len, file_type 넣어줘야함
@@ -980,9 +1015,11 @@ int ext2_mkdir(const EXT2_NODE* parent, const char* entryName, EXT2_NODE* retEnt
 	}
 
 	ZeroMemory(retEntry, sizeof(EXT2_NODE));
+
+	retEntry->fs = parent->fs;
+
 	// 임시로 0번 그룹에서 아이노드 할당
 	retEntry->entry.inode = alloc_free_inode_in_group(parent->fs, 0);
-
 	retEntry->entry.file_type = EXT2_FT_DIR;
 	retEntry->entry.name_len = strlen(entryName);
 	memcpy(retEntry->entry.name, entryName, retEntry->entry.name_len);
