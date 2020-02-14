@@ -622,45 +622,48 @@ int format_name(EXT2_FILESYSTEM* fs, char* name)
 	return EXT2_SUCCESS;
 }
 
-int lookup_entry(EXT2_FILESYSTEM* fs, const int inode_num, const char* name, EXT2_NODE* retEntry)
-{
-	return find_entry_on_root(fs, inode_num, name, retEntry);
-}
+
 
 int find_entry_at_block(const BYTE* block, const BYTE* formattedName, EXT2_DIR_ENTRY* dir_entry, UINT32* offset)
 {
-	EXT2_DIR_ENTRY* entry = (EXT2_DIR_ENTRY *) block;
+	EXT2_DIR_ENTRY* entry;
+	BYTE *entry_byte = (EXT2_DIR_ENTRY *) block;
 	UINT32 byte_per_block = 1024 << LOG_BLOCK_SIZE;
 	UINT16 entry_offset = 0;
+
+	entry = (EXT2_DIR_ENTRY *)entry_byte;
 
 	while (entry->record_len != byte_per_block - entry_offset)
 	{
 		// 중간에 빈자리 찾을 때
 		if (formattedName == NULL)
 		{
-			if ( get_real_record_len(entry) < entry->record_len)
+			if ( GET_RECORD_LEN(entry) < entry->record_len)
 			{
 				*offset = entry_offset;
-				memcpy(dir_entry, entry, entry->record_len);
+				memcpy(dir_entry, entry, GET_RECORD_LEN(entry));
 				return EXT2_SUCCESS;
 			}
 		}
 		else
 		{
 			// formattedName file이 있는 경우
+			UINT32 length = MAX(entry->name_len, strlen(formattedName));
 			if (memcmp(formattedName, entry->name, entry->name_len) == 0)
 			{
 				*offset = entry_offset;
-				memcpy(dir_entry, entry, entry->record_len);
+				memcpy(dir_entry, entry, GET_RECORD_LEN(entry));
 				return EXT2_SUCCESS;
 			}
 		}
 		entry_offset += entry->record_len; 
-		entry += entry->record_len;
-	}
+		entry_byte += entry->record_len;
+		entry = (EXT2_DIR_ENTRY *)entry_byte;
+	} 
 
 	*offset = entry_offset;
-	memcpy(dir_entry, entry, entry->record_len);
+	memcpy(dir_entry, entry, GET_RECORD_LEN(entry));
+	if (memcmp(formattedName, entry->name, entry->name_len) == 0) return EXT2_SUCCESS;
 
 	// 빈자리가 블럭의 마지막 entry인 경우
 	if (formattedName == NULL) return -2;
@@ -668,9 +671,9 @@ int find_entry_at_block(const BYTE* block, const BYTE* formattedName, EXT2_DIR_E
 	return EXT2_ERROR;
 }
 
-int find_entry_on_root(EXT2_FILESYSTEM* fs, const int inode_num, char* formattedName, EXT2_NODE* ret)
+int lookup_entry(EXT2_FILESYSTEM* fs, const int inode_num, char* formattedName, EXT2_NODE* ret)
 {
-	// 모든 그룹을 다 돌아야됨.
+	// dir 만드는 경우..모든 그룹을 다 돌아야됨.
 	BYTE block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
 	int i_block_index;
 	INODE inode;
@@ -766,16 +769,15 @@ int get_entry_at_block(const unsigned char *block, const unsigned char *formatte
 {
 	int result;
 	UINT32 offset;
-	EXT2_DIR_ENTRY entry;
+	
 	UINT32 block_per_group = ret->fs->sb.block_per_group;// ret, fs등록 fs_create에서 해줘서 괜찮지 않을랑가
 
-	result = find_entry_at_block(block, formattedName, &entry, &offset);
+	result = find_entry_at_block(block, formattedName, &ret->entry, &offset);
 	// success 나오면 파일 있다는 거 -> find_entry_on_root 도 success
 	// -1 나오면 다음 블록도 뒤져야댐 -> for문 계속 돌려
 	// 왜냐면 마지막 엔트리까지 닿았다가 앞에 엔트리들 다삭제된 걸 수도 있으니깐.
 	// -2 나오면 name에 null넣은 경우만 해당하는데, 빈자리가 블럭 마지막 디렉토리 엔트리에 있다는 의미.
 
-	memcpy(&ret->entry, &entry, sizeof(entry));
 	get_block_location(ret->fs, block_num, &ret->location);
 
 	ret->location.offset = offset;
@@ -783,6 +785,7 @@ int get_entry_at_block(const unsigned char *block, const unsigned char *formatte
 	return result;
 }
 
+/*
 int find_entry_on_data(EXT2_FILESYSTEM* fs, INODE first, const BYTE* formattedName, EXT2_NODE* ret)
 {
 	BYTE block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
@@ -790,6 +793,7 @@ int find_entry_on_data(EXT2_FILESYSTEM* fs, INODE first, const BYTE* formattedNa
 	
 	return EXT2_ERROR;
 }
+*/
 
 int read_root_sector(EXT2_FILESYSTEM* fs, EXT2_DIR_ENTRY *root)
 {
@@ -829,19 +833,10 @@ int ext2_create(EXT2_NODE* parent, char* entryName, EXT2_NODE* retEntry)
 	inode = parent->entry.inode;
 	if ((result = lookup_entry(parent->fs, inode, name, retEntry)) == EXT2_SUCCESS) return EXT2_ERROR;
 	else if (result == -2) return EXT2_ERROR;
-
-	/* ret entry의 dir entry에 name_len, file_type, record_len 등록 */
-	name_length = strlen(name);
-	retEntry->entry.name_len = name_length;
-
-	// retEntry->entry.record_len = ;
+	// retEntry에 마지막 entry 들어가 있음
 
 	/* parent 에 retEntry 삽입 */
-	if (insert_entry(inode, retEntry, 0) == EXT2_ERROR)return EXT2_ERROR;
-	
-	// 원래 써진 것 이상으로 해줘야할 일
-	// directory entry에 record_len, name_len, file_type 넣어줘야함
-	// ret entry에 location 등록해야함.
+	if (insert_entry(inode, retEntry) == EXT2_ERROR)return EXT2_ERROR;
 
 	return EXT2_SUCCESS;
 }

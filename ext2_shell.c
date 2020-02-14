@@ -297,7 +297,7 @@ int fs_lookup(DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, const SHELL_EN
 
 	shell_entry_to_ext2_entry(parent, &EXT2Parent);
 
-	if (result = ext2_lookup(&EXT2Parent, name, &EXT2Entry))return result;
+	if (result = ext2_lookup(&EXT2Parent, name, &EXT2Entry)) return result;
 
 	ext2_entry_to_shell_entry(EXT2Parent.fs, &EXT2Entry, entry);
 
