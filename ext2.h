@@ -182,4 +182,6 @@ int fill_descriptor_block(EXT2_GROUP_DESCRIPTOR * gd, EXT2_SUPER_BLOCK * sb, SEC
 int create_root(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK * sb, EXT2_GROUP_DESCRIPTOR *gd);
 void process_meta_data_for_block_used(EXT2_FILESYSTEM * fs, UINT32 inode_num);
 
+UINT16 get_real_record_len(EXT2_DIR_ENTRY* entry) ;
+
 #endif // _EXT2_H_

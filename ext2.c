@@ -127,8 +127,8 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 
 	/* block bitmap 채우기 */
 	ZeroMemory((block), sizeof(block));
-	//printf("first_meta_bg = %u\n", sb.first_meta_bg);
-	for (unsigned int i = 0; i < sb.first_meta_bg+1; i++) {
+
+	for (unsigned int i = 0; i < sb.first_meta_bg + 1; i++) {
 		(((volatile unsigned int *) block)[i >> 5]) |= (1UL << (i & 31));
 	}
 	if (write_block(disk, &sb, block, gd.start_block_of_block_bitmap) == EXT2_ERROR)
@@ -136,7 +136,6 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 
 	/* inode bitmap 채우기 */
 	ZeroMemory(block, sizeof(block));
-	// UINT32 number_of_used_block = number_of_descriptor_block + number_of_inode_table_block + 3;
 
 	block[0] = 0xff; // 8개
 	block[1] = 0x03; // 2개  inode 예약 영역 10개 잡아줌
@@ -208,7 +207,7 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 		/* gi번째 group에 inode table 채우기 */
 		ZeroMemory(block, sizeof(block));
 
-		for (i = sb.block_per_group * gi+ gd.start_block_of_inode_table; i < sb.block_per_group * gi + sb.first_meta_bg; i++)
+		for (i = sb.block_per_group * gi + gd.start_block_of_inode_table; i < sb.block_per_group * gi + sb.first_meta_bg; i++)
 		{
 			if (write_block(disk, &sb, block, i) == EXT2_ERROR)
 			return EXT2_ERROR;
@@ -621,23 +620,175 @@ int format_name(EXT2_FILESYSTEM* fs, char* name)
 	return EXT2_SUCCESS;
 }
 
-int lookup_entry(EXT2_FILESYSTEM* fs, const int inode, const char* name, EXT2_NODE* retEntry)
+int lookup_entry(EXT2_FILESYSTEM* fs, const int inode_num, const char* name, EXT2_NODE* retEntry)
 {
+	find_entry_on_root(fs, inode_num, name, retEntry);
+}
+
+int find_entry_at_block(const BYTE* block, const BYTE* formattedName, EXT2_DIR_ENTRY* dir_entry, UINT32* offset)
+{
+	EXT2_DIR_ENTRY* entry = (EXT2_DIR_ENTRY *) block;
+	UINT32 byte_per_block = 1024 << LOG_BLOCK_SIZE;
+	UINT16 entry_offset = 0;
+
+	while (entry->record_len != byte_per_block - entry_offset)
+	{
+		// 중간에 빈자리 찾을 때
+		if (formattedName == NULL)
+		{
+			if ( get_real_record_len(entry) < entry->record_len)
+			{
+				*offset = entry_offset;
+				dir_entry = entry;
+				return EXT2_SUCCESS;
+			}
+		}
+		else
+		{
+			// formattedName file이 있는 경우
+			if (memcmp(formattedName, entry->name, EXT2_NAME_LEN) == 0)
+			{
+				*offset = entry_offset;
+				dir_entry = entry;
+				return EXT2_SUCCESS;
+			}
+		}
+		entry_offset += entry->record_len; 
+		entry += entry->record_len;
+	}
+
+	*offset = entry_offset;
+	dir_entry = entry;
+
+	// 빈자리가 블럭의 마지막 entry인 경우
+	if (formattedName == NULL) return -2;
+
 	return EXT2_ERROR;
 }
 
-int find_entry_at_sector(const BYTE* sector, const BYTE* formattedName, UINT32 begin, UINT32 last, UINT32* number)
+int find_entry_on_root(EXT2_FILESYSTEM* fs, const int inode_num, char* formattedName, EXT2_NODE* ret)
 {
+	// 모든 그룹을 다 돌아야됨.
+	BYTE block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
+	int i_block_index;
+	INODE inode;
+	UINT32 byte_per_block = 1024 << LOG_BLOCK_SIZE;
+	UINT32 descriptor_per_block = byte_per_block / 32;
+	int result;
+	EXT2_DIR_ENTRY entry;
+	
+	//last_entry = (MAX_SECTOR_SIZE * SECTOR_PER_BLOCK) / descriptor_per_block - 1;
+
+	get_inode(fs, inode_num, &inode);
+	// inode의 i_block을 돌아서 
+	for (i_block_index = 0; i_block_index < 15; i_block_index++)
+	{	
+		// inode.i_block[i_block_index] 번째 block, block 버퍼에 저장
+		UINT32 block_num = inode.i_block[i_block_index];
+		EXT2_ENTRY_LOCATION loc;
+		get_block_location(fs, block_num, &loc);
+		read_disk_per_block(fs, loc.group, loc.block, block);
+		
+		// && ~ : i_block에 block이 할당된 경우 
+		if (i_block_index < 12 && inode.i_block[i_block_index])
+		{
+			result = get_entry_at_block(block, formattedName, inode.i_block[i_block_index], ret);
+			if (result = EXT2_ERROR) continue;
+			else return result;
+		}
+		else if (i_block_index >= 12 && inode.i_block[i_block_index])
+		{
+			int block_offset_1, block_offset_2, block_offset_3;
+			int max_block_offset = byte_per_block / sizeof(int *);
+			BYTE file_block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
+			BYTE file_block_2[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
+			BYTE file_block_3[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
+
+			switch(i_block_index)
+			{
+				case 12: // 단일 간접
+					for (block_offset_1 = 0; block_offset_1 < max_block_offset ; block_offset_1++)
+					{
+						*(int *)( block[block_offset_1] ) = file_block;
+
+						result = get_entry_at_block(block, formattedName, inode.i_block[i_block_index], ret);
+						if (result = EXT2_ERROR) continue;
+						else return result;
+					}
+					break;
+				case 13: // 이중 간접
+					for (block_offset_2 = 0; block_offset_2 < max_block_offset ; block_offset_2++)
+					{
+						*(int *)( block[block_offset_2] ) = file_block_2;
+
+						for (block_offset_1 = 0; block_offset_1 < max_block_offset ; block_offset_1++)
+						{
+							*(int *)( block[block_offset_1] ) = file_block;
+
+							result = get_entry_at_block(block, formattedName, inode.i_block[i_block_index], ret);
+							if (result = EXT2_ERROR) continue;
+							else return result;
+						}
+					}
+					break;
+				case 14: // 삼중 간접
+					for (block_offset_3 = 0; block_offset_3 < max_block_offset ; block_offset_3++)
+					{
+						*(int *)( block[block_offset_3] ) = file_block_3;
+						for (block_offset_2 = 0; block_offset_2 < max_block_offset ; block_offset_2++)
+						{
+							*(int *)( block[block_offset_2] ) = file_block_2;
+
+							for (block_offset_1 = 0; block_offset_1 < max_block_offset ; block_offset_1++)
+							{
+								*(int *)( block[block_offset_1] ) = file_block;
+						
+								result = get_entry_at_block(block, formattedName, inode.i_block[i_block_index], ret);
+								if (result = EXT2_ERROR) continue;
+								else return result;
+							}
+						}
+					}
+					break;
+			} // switch문 종료	
+		}
+	}
 	return EXT2_ERROR;
 }
 
-int find_entry_on_root(EXT2_FILESYSTEM* fs, INODE inode, char* formattedName, EXT2_NODE* ret)
+int get_entry_at_block(const unsigned char *block, const unsigned char *formattedName, UINT32 block_num, EXT2_NODE* ret)
 {
-	return EXT2_ERROR;
+	int result;
+	UINT32 offset;
+	EXT2_DIR_ENTRY entry;
+	UINT32 block_per_group = ret->fs->sb.block_per_group;// ret, fs등록 fs_create에서 해줘서 괜찮지 않을랑가
+
+	result = find_entry_at_block(block, formattedName, &entry, &offset);
+	// success 나오면 파일 있다는 거 -> find_entry_on_root 도 success
+	// -1 나오면 다음 블록도 뒤져야댐 -> for문 계속 돌려
+	// 왜냐면 마지막 엔트리까지 닿았다가 앞에 엔트리들 다삭제된 걸 수도 있으니깐.
+
+	if (result == EXT2_ERROR) 
+	{
+		return EXT2_ERROR;
+	}
+	else
+	{
+		memcpy(&ret->entry, &entry, sizeof(entry));
+
+		ret->location.group = block_num / block_per_group; 
+		ret->location.block = block_num - ret->location.group * block_per_group;
+		ret->location.offset = offset;
+	}
+
+	return EXT2_SUCCESS;
 }
 
 int find_entry_on_data(EXT2_FILESYSTEM* fs, INODE first, const BYTE* formattedName, EXT2_NODE* ret)
 {
+	BYTE block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
+	
+	
 	return EXT2_ERROR;
 }
 
@@ -655,8 +806,45 @@ int read_root_sector(EXT2_FILESYSTEM* fs, EXT2_DIR_ENTRY *root)
 
 int ext2_create(EXT2_NODE* parent, char* entryName, EXT2_NODE* retEntry)
 {
+	if ((parent->fs->gd.free_inodes_count) == 0) return EXT2_ERROR;
+
+	UINT32 inode;
+	BYTE name[EXT2_NAME_LEN] = { 0, };
+	BYTE block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
+	int result;
+	BYTE name_length;
+
+	/* 형식에 맞게 name 수정*/
+	strcpy(name, entryName);
+	if (format_name(parent->fs, name) == EXT2_ERROR) return EXT2_ERROR;
+
+	ZeroMemory(retEntry, sizeof(EXT2_NODE));
+
+	/* ret entry의 dir entry에 name 등록 */
+	memcpy(retEntry->entry.name, name, EXT2_NAME_LEN);
+
+	/* ret entry에 fs 등록 */
+	retEntry->fs = parent->fs;
+
+	/* parent의 dir entry에 name 파일 있는지 확인 */
+	inode = parent->entry.inode;
+	if ((result = lookup_entry(parent->fs, inode, name, retEntry)) == EXT2_SUCCESS) return EXT2_ERROR;
+	else if (result == -2) return EXT2_ERROR;
+
+	/* ret entry의 dir entry에 name_len, file_type, record_len 등록 */
+	name_length = strlen(name);
+	retEntry->entry.name_len = name_length;
+
+	// retEntry->entry.record_len = ;
+
+	/* parent 에 retEntry 삽입 */
+	if (insert_entry(inode, retEntry, 0) == EXT2_ERROR)return EXT2_ERROR;
 	
-    return EXT2_SUCCESS;
+	// 원래 써진 것 이상으로 해줘야할 일
+	// directory entry에 record_len, name_len, file_type 넣어줘야함
+	// ret entry에 location 등록해야함.
+
+	return EXT2_SUCCESS;
 }
 
 
