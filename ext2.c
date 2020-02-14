@@ -432,7 +432,7 @@ void process_meta_data_for_inode_used(EXT2_NODE * retEntry, UINT32 inode_num, in
 
 int insert_entry(UINT32 inode_num, EXT2_NODE * retEntry)
 {
-
+	BYTE block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
 
 	return EXT2_ERROR;
 }

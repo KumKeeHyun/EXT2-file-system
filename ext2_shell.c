@@ -151,7 +151,7 @@ static SHELL_FS_OPERATIONS   g_fsOprs =
 	fs_read_dir,
 	NULL,
 	fs_mkdir,
-	NULL,
+	fs_rmdir,
 	fs_lookup,
 	&g_file,
 	NULL
@@ -387,4 +387,10 @@ int fs_mkdir(DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, const SHELL_ENT
 	ext2_entry_to_shell_entry(ext2, &EXT2_Entry, retEntry);
 
 	return result;
+}
+
+int fs_rmdir( DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, const SHELL_ENTRY* parent, const char* name)
+{
+	
+	return EXT2_ERROR;
 }
