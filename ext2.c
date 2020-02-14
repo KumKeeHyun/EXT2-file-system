@@ -8,6 +8,8 @@ typedef struct
 #define MIN( a, b )					( ( a ) < ( b ) ? ( a ) : ( b ) )
 #define MAX( a, b )					( ( a ) > ( b ) ? ( a ) : ( b ) )
 
+#define GET_RECORD_LEN(entry) 		(entry)->name_len + 8
+
 int ext2_write(EXT2_NODE* file, unsigned long offset, unsigned long length, const char* buffer)
 {
 	return 0;
@@ -15,7 +17,7 @@ int ext2_write(EXT2_NODE* file, unsigned long offset, unsigned long length, cons
 
 UINT32 get_free_inode_number(EXT2_FILESYSTEM* fs);
 
-int write_block(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK* sb, SECTOR* block, unsigned int start_block)
+int write_block(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK* sb, BYTE* block, unsigned int start_block)
 {
 	SECTOR sector_index = start_block * sb->sector_per_block + BOOT_SECTOR_BASE;
 
@@ -29,7 +31,7 @@ int write_block(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK* sb, SECTOR* block, unsi
 	return EXT2_SUCCESS;
 }
 
-int read_block(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK* sb, SECTOR* block, unsigned int start_block) 
+int read_block(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK* sb, BYTE* block, unsigned int start_block) 
 {
 	SECTOR sector_index = start_block * sb->sector_per_block + BOOT_SECTOR_BASE;
 
@@ -382,7 +384,7 @@ int create_root(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK * sb, EXT2_GROUP_DESCRIP
 	entry->file_type = EXT2_FT_DIR;
 	entry->name_len = strlen(".");
 	memcpy(entry->name, ".", entry->name_len);
-	entry->record_len = sizeof(EXT2_DIR_ENTRY) - EXT2_NAME_LEN + entry->name_len;
+	entry->record_len = GET_RECORD_LEN(entry);
 
 	// ".." entry
 	EXT2_DIR_ENTRY *prev_entry = entry;
@@ -428,8 +430,10 @@ void process_meta_data_for_inode_used(EXT2_NODE * retEntry, UINT32 inode_num, in
 	return EXT2_ERROR;
 }
 
-int insert_entry(UINT32 inode_num, EXT2_NODE * retEntry, int fileType)
+int insert_entry(UINT32 inode_num, EXT2_NODE * retEntry)
 {
+
+
 	return EXT2_ERROR;
 }
 
@@ -560,9 +564,13 @@ int data_write(EXT2_FILESYSTEM * fs, SECTOR group, SECTOR block, BYTE* sector)
 	return fs->disk->write_sector(fs->disk, real_index, sector);
 }*/
 
-unsigned char toupper(unsigned char ch);
-int isalpha(unsigned char ch);
-int isdigit(unsigned char ch);
+int isalpha(unsigned char ch) {
+	return ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z'));
+}
+
+int isdigit(unsigned char ch) {
+	return (ch >= '0' && ch <= '9');
+}
 
 void upper_string(char* str, int length)
 {
@@ -589,21 +597,25 @@ int format_name(EXT2_FILESYSTEM* fs, char* name)
 	{
 		for (i = 0; i < length; i++)
 		{
-			if (name[i] != '.' && !isdigit(name[i]) && !isalpha(name[i]))
+			if (name[i] != '.' && !isdigit(name[i]) && !isalpha(name[i])) {
+				printf("%c is not valid characte\n", name[i]);
 				return EXT2_ERROR;
+			}	
 
 			if (name[i] == '.')
 			{
-				if (extender)
+				if (extender) {
+					printf("reduplication extender('.')\n");
 					return EXT2_ERROR;
+				}
 				extender = 1;
 			}
-			else
-				return EXT2_ERROR;
 		}
 
-		if (length > EXT2_NAME_LEN || length == 0 || extenderCurrent > 11)
+		if (length > EXT2_NAME_LEN || length == 0 || extenderCurrent > 11) {
+			printf("wrong length : %u\n", length);
 			return EXT2_ERROR;
+		}
 	}
 
 	return EXT2_SUCCESS;
@@ -635,7 +647,7 @@ int read_root_sector(EXT2_FILESYSTEM* fs, EXT2_DIR_ENTRY *root)
 	root->inode = 2;
 	root->name_len = strlen(VOLUME_LABLE);
 	memcpy(root->name, VOLUME_LABLE, root->name_len);
-	root->record_len = sizeof(EXT2_DIR_ENTRY) - EXT2_NAME_LEN + root->name_len;
+	root->record_len = GET_RECORD_LEN(root);
 
 	printf("root record len : %u\n", root->record_len);
 	return EXT2_SUCCESS;
@@ -751,7 +763,7 @@ int read_dir_from_block(EXT2_FILESYSTEM* fs, EXT2_ENTRY_LOCATION *loc, BYTE* blo
 		node.fs = fs;
 		node.location = *loc;
 
-		real_record_len = entry->name_len + 8; // 8은 dir_entry에서 name 필드를 제외한 byte 크기
+		real_record_len = GET_RECORD_LEN(entry);; // 8은 dir_entry에서 name 필드를 제외한 byte 크기
 		memcpy(&(node.entry), entry, real_record_len);
 		
 		adder(fs, list, &node);
@@ -770,8 +782,58 @@ char* my_strncpy(char* dest, const char* src, int length)
 
 int ext2_mkdir(const EXT2_NODE* parent, const char* entryName, EXT2_NODE* retEntry)
 {
-	
-	return EXT2_ERROR;
+	INODE inode_buf;
+	EXT2_DIR_ENTRY dot_entry;
+	EXT2_ENTRY_LOCATION loc;
+	BYTE block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
+
+	if (format_name(parent->fs, entryName) == EXT2_ERROR) {
+		printf("entry name is wrong\n");
+		return EXT2_ERROR;
+	}
+
+	ZeroMemory(retEntry, sizeof(EXT2_NODE));
+	// 임시로 0번 그룹에서 아이노드 할당
+	retEntry->entry.inode = alloc_free_inode_in_group(parent->fs, 0);
+
+	retEntry->entry.file_type = EXT2_FT_DIR;
+	retEntry->entry.name_len = strlen(entryName);
+	memcpy(retEntry->entry.name, entryName, retEntry->entry.name_len);
+	retEntry->entry.record_len = GET_RECORD_LEN(&(retEntry->entry));
+
+	// insert_entry(parent->entry.inode, retEntry)
+	// --------- insert_entry 임시용 ---------
+	get_inode(parent->fs, parent->entry.inode, &inode_buf);
+	get_block_location(parent->fs, inode_buf.i_block[0], &loc);
+	read_disk_per_block(parent->fs, loc.group, loc.block, block);
+
+	EXT2_DIR_ENTRY *entry;
+	BYTE *block_offset, block_end;
+	UINT32 real_record_len, end_record_len;
+	block_offset = block;
+	block_end = block_offset + (1024 << parent->fs->sb.log_block_size);
+
+	while (block_offset != block_end) {
+		entry = (EXT2_DIR_ENTRY *)block_offset;
+		real_record_len = GET_RECORD_LEN(entry);
+		if (real_record_len != entry->record_len) {
+			end_record_len = entry->record_len - real_record_len;
+			entry->record_len = real_record_len;
+			block_offset += real_record_len;
+			entry = (EXT2_DIR_ENTRY *)block_offset;
+			retEntry->entry.record_len = end_record_len;
+			memcpy(entry, &(retEntry->entry), retEntry->entry.record_len);
+			
+			break;
+		}
+		block_offset += entry->record_len;
+	}
+
+	write_disk_per_block(parent->fs, loc.group, loc.block, block);
+	// --------- insert_entry 임시용 ---------
+
+
+	return EXT2_SUCCESS;
 }
 
 void ext2_print_entry_name(EXT2_NODE *entry) 
