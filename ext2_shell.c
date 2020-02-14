@@ -171,12 +171,8 @@ int fs_mount(DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, SHELL_ENTRY* ro
 	ZeroMemory(fs, sizeof(EXT2_FILESYSTEM));
 	fs->disk = disk;
 
-	printf("1\n");
-
 	result = ext2_read_superblock(fs, &ext2_entry);
 	number_of_group = disk->number_of_sectors / (fs->sb.sector_per_block * fs->sb.block_per_group);
-	
-	printf("2\n");
 
 	if (result == EXT2_SUCCESS)
 	{

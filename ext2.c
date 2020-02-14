@@ -524,7 +524,7 @@ int get_inode_location(EXT2_FILESYSTEM *fs, UINT32 inode_num, EXT2_ENTRY_LOCATIO
 
 	UINT32 inode_per_group = fs->sb.inode_per_group;
 	UINT32 table_index = (inode_num - 1) % inode_per_group;
-	UINT32 inode_per_block = (1024 << fs->sb.log_block_size) / fs->sb.inode_per_group;
+	UINT32 inode_per_block = (1024 << fs->sb.log_block_size) / fs->sb.inode_size;
 	// 128말고 fs->sb.inode_size 하면 안될까
 	
 	loc->group = inode_num / inode_per_group;
@@ -903,14 +903,15 @@ int ext2_read_superblock(EXT2_FILESYSTEM* fs, EXT2_NODE* root)
 	memcpy(&fs->sb, block, sizeof(EXT2_SUPER_BLOCK));
 	read_disk_per_block(fs, 0, group_descriptor_block, block);
 	memcpy(&fs->gd, block, sizeof(EXT2_GROUP_DESCRIPTOR));
-	printf("gaga\n");
+	
 	/* super block인지 확인 */
 	if (fs->sb.magic_signature != 0xEF53) 
 		return EXT2_ERROR;
-	printf("gaga\n");
+	
 	/* root 디렉토리로 엔트리 채우기 */
 	ZeroMemory(root, sizeof(EXT2_NODE));
 	if (read_root_sector(fs, &root->entry) == EXT2_ERROR)
+		return EXT2_ERROR;
 	root->fs = fs;
 
 	return EXT2_SUCCESS;
@@ -934,12 +935,46 @@ int ext2_lookup(EXT2_NODE* parent, const char* entryName, EXT2_NODE* retEntry)
 
 int ext2_read_dir(EXT2_NODE* dir, EXT2_NODE_ADD adder, void* list)
 {
-	
+	BYTE block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
+	EXT2_ENTRY_LOCATION loc;
+	INODE inode_buf;
+	UINT32 blk_idx = 0, block_num;
+
+	get_inode(dir->fs, dir->entry.inode, &inode_buf);
+	while (inode_buf.i_block[blk_idx] != 0)
+	{
+		block_num = inode_buf.i_block[blk_idx];
+		get_block_location(dir->fs, block_num, &loc);
+		read_disk_per_block(dir->fs, loc.group, loc.block, block);
+
+		if (read_dir_from_block(dir->fs, &loc, block, adder, list))
+			break;
+
+		blk_idx++;
+	}
+
 	return EXT2_SUCCESS;
 }
 
-int read_dir_from_sector(EXT2_FILESYSTEM* fs, BYTE* sector, EXT2_NODE_ADD adder, void* list)
+int read_dir_from_block(EXT2_FILESYSTEM* fs, EXT2_ENTRY_LOCATION *loc, BYTE* block, EXT2_NODE_ADD adder, void* list)
 {
+	BYTE *block_end = block + (1024 << fs->sb.log_block_size);
+	EXT2_NODE node;
+	ZeroMemory(&node, sizeof(EXT2_NODE));
+	
+	BYTE *block_offset = block;
+	EXT2_DIR_ENTRY *entry = (EXT2_DIR_ENTRY *)block_offset;
+
+	while (block_offset != block_end) {
+		ZeroMemory(&node, sizeof(EXT2_NODE));
+		node.fs = fs;
+		node.location = *loc;
+		memcpy(&(node.entry), entry, entry->record_len);
+		adder(fs, list, &node);
+
+		block_offset += entry->record_len;
+		entry = (EXT2_DIR_ENTRY *)block_offset;
+	}
 	
 	return 0;
 }

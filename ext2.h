@@ -158,13 +158,20 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 block_size);
 int ext2_create(EXT2_NODE* parent, char* entryName, EXT2_NODE* retEntry);
 int ext2_lookup(EXT2_NODE* parent, const char* entryName, EXT2_NODE* retEntry);
 
+typedef int(*EXT2_NODE_ADD)(EXT2_FILESYSTEM*,void*, EXT2_NODE*);
+
+int ext2_read_superblock(EXT2_FILESYSTEM* fs, EXT2_NODE* root);
+int ext2_read_dir(EXT2_NODE* dir, EXT2_NODE_ADD adder, void* list);
+
+int read_dir_from_block(EXT2_FILESYSTEM* fs, EXT2_ENTRY_LOCATION *loc, BYTE* block, EXT2_NODE_ADD adder, void* list);
+
+
 UINT32 expand_block(EXT2_FILESYSTEM * , UINT32 );
 int fill_super_block(EXT2_SUPER_BLOCK * sb, SECTOR numberOfSectors, UINT32 bytesPerSector);
 int fill_descriptor_block(EXT2_GROUP_DESCRIPTOR * gd, EXT2_SUPER_BLOCK * sb, SECTOR numberOfSectors, UINT32 bytesPerSector);
 int create_root(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK * sb, EXT2_GROUP_DESCRIPTOR *gd);
-typedef int(*EXT2_NODE_ADD)(EXT2_FILESYSTEM*,void*, EXT2_NODE*);
 void process_meta_data_for_block_used(EXT2_FILESYSTEM * fs, UINT32 inode_num);
-int ext2_read_superblock(EXT2_FILESYSTEM* fs, EXT2_NODE* root);
+
 UINT16 get_real_record_len(EXT2_DIR_ENTRY* entry) ;
 
 #endif // _EXT2_H_
