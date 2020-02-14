@@ -146,8 +146,8 @@ typedef struct {
     EXT2_ENTRY_LOCATION location;
 } EXT2_NODE;
 
-int write_block(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK* sb, SECTOR* block, unsigned int start_block);
-int read_block(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK* sb, SECTOR* block, unsigned int start_block);
+int write_block(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK* sb, BYTE* block, unsigned int start_block);
+int read_block(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK* sb, BYTE* block, unsigned int start_block);
 
 int meta_read(EXT2_FILESYSTEM *, SECTOR group,SECTOR block, BYTE* sector);
 int meta_write(EXT2_FILESYSTEM * fs, SECTOR group, SECTOR block, BYTE* sector);

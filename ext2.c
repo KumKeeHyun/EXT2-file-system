@@ -15,7 +15,7 @@ int ext2_write(EXT2_NODE* file, unsigned long offset, unsigned long length, cons
 
 UINT32 get_free_inode_number(EXT2_FILESYSTEM* fs);
 
-int write_block(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK* sb, SECTOR* block, unsigned int start_block)
+int write_block(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK* sb, BYTE* block, unsigned int start_block)
 {
 	SECTOR sector_index = start_block * sb->sector_per_block + BOOT_SECTOR_BASE;
 
@@ -29,7 +29,7 @@ int write_block(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK* sb, SECTOR* block, unsi
 	return EXT2_SUCCESS;
 }
 
-int read_block(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK* sb, SECTOR* block, unsigned int start_block) 
+int read_block(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK* sb, BYTE* block, unsigned int start_block) 
 {
 	SECTOR sector_index = start_block * sb->sector_per_block + BOOT_SECTOR_BASE;
 
@@ -79,6 +79,8 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 	//BYTE block[MAX_SECTOR_SIZE * sector_per_block];
 	BYTE block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
 
+	BYTE *block_ptr = block;
+	printf ("%p\n",block_ptr);
 	ZeroMemory(block, sizeof(block));
 	memcpy(block, &sb, sizeof(sb));
 
@@ -381,7 +383,7 @@ int create_root(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK * sb, EXT2_GROUP_DESCRIP
 	entry->file_type = EXT2_FT_DIR;
 	entry->name_len = strlen(".");
 	memcpy(entry->name, ".", entry->name_len);
-	entry->record_len = sizeof(EXT2_DIR_ENTRY) - EXT2_NAME_LEN + entry->name_len;
+	entry->record_len = 8 + entry->name_len;
 
 	// ".." entry
 	EXT2_DIR_ENTRY *prev_entry = entry;
@@ -669,7 +671,7 @@ int find_entry_at_block(const BYTE* block, const BYTE* formattedName, EXT2_DIR_E
 		else
 		{
 			// formattedName file이 있는 경우
-			if (memcmp(formattedName, entry->name, EXT2_NAME_LEN) == 0)
+			if (memcmp(formattedName, entry->name, entry->name_len) == 0)
 			{
 				*offset = entry_offset;
 				dir_entry = entry;
@@ -790,10 +792,11 @@ int get_entry_at_block(const unsigned char *block, const unsigned char *formatte
 	// success 나오면 파일 있다는 거 -> find_entry_on_root 도 success
 	// -1 나오면 다음 블록도 뒤져야댐 -> for문 계속 돌려
 	// 왜냐면 마지막 엔트리까지 닿았다가 앞에 엔트리들 다삭제된 걸 수도 있으니깐.
+	// -2 나오면 name에 null넣은 경우만 해당하는데, 빈자리가 블럭 마지막 디렉토리 엔트리에 있다는 의미.
 
 	if (result == EXT2_ERROR) 
 	{
-		return EXT2_ERROR;
+		printf("'%s' file is already exist.\n", formattedName);
 	}
 	else
 	{
@@ -804,7 +807,7 @@ int get_entry_at_block(const unsigned char *block, const unsigned char *formatte
 		ret->location.offset = offset;
 	}
 
-	return EXT2_SUCCESS;
+	return result;
 }
 
 int find_entry_on_data(EXT2_FILESYSTEM* fs, INODE first, const BYTE* formattedName, EXT2_NODE* ret)
