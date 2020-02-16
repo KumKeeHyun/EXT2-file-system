@@ -117,7 +117,6 @@ int check_conditions( int conditions )
 void do_shell( void )
 {
 	char buf[1000];
-	char command[100];
 	char* argv[100];
 	int argc;
 	int i;
