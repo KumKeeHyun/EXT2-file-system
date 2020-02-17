@@ -656,6 +656,7 @@ int format_name(EXT2_FILESYSTEM* fs, const char* name)
 	return EXT2_SUCCESS;
 }
 
+
 // null : 새로운 entry가 들어갈 자리를 포함하는 entry의 location 정보
 // name : name에 해당하는 entry의 location 정보
 // 둘다 못찾았으면 ERROR 리턴 (어차피 entry의 끝은 i_block이 0인것을 검사해서 확인할 수 있음) 
@@ -671,21 +672,25 @@ int find_entry_at_block(const BYTE* block, const BYTE* formattedName, EXT2_DIR_E
 	block_end = block_offset + 1024;
 
 	while (block_offset != block_end)
+
 	{
 		entry = (EXT2_DIR_ENTRY *)block_offset;
 		real_record_len = GET_RECORD_LEN(entry);
 
 		if (formattedName == NULL) // 빈자리 찾기
 		{
+
 			hole_len = entry->record_len - real_record_len;
 			if ((hole_len > 0) && ((GET_RECORD_LEN(dir_entry)) <= hole_len))
 			{
 				*offset = loc_offset;
+
 				return EXT2_SUCCESS;
 			}
 		}
 		else // 엔트리 찾기
 		{
+
 			cmp_length = MAX((size_t)(entry->name_len), strlen(formattedName));
 			if (memcmp(entry->name, formattedName, cmp_length) == 0) 
 			{
@@ -705,7 +710,7 @@ int find_entry_at_block(const BYTE* block, const BYTE* formattedName, EXT2_DIR_E
 
 int lookup_entry(EXT2_FILESYSTEM* fs, const int inode_num, const char* formattedName, EXT2_NODE* ret)
 {
-	// 모든 그룹을 다 돌아야됨.
+	// dir 만드는 경우..모든 그룹을 다 돌아야됨.
 	BYTE block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
 	int i_block_index;
 	INODE inode;
@@ -857,6 +862,7 @@ int ext2_create(EXT2_NODE* parent, const char* entryName, EXT2_NODE* retEntry)
 	if ((result = lookup_entry(parent->fs, inode, name, retEntry)) == EXT2_SUCCESS) return EXT2_ERROR;
 	else if (result == -2) return EXT2_ERROR;
 
+
 	/* ret entry의 dir entry에 name_len, file_type, record_len 등록 */
 	name_length = strlen(name);
 	retEntry->entry.name_len = name_length;
@@ -870,6 +876,7 @@ int ext2_create(EXT2_NODE* parent, const char* entryName, EXT2_NODE* retEntry)
 	// 원래 써진 것 이상으로 해줘야할 일
 	// directory entry에 record_len, name_len, file_type 넣어줘야함
 	// ret entry에 location 등록해야함.
+
 
 	return EXT2_SUCCESS;
 }
