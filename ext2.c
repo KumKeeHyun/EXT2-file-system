@@ -424,7 +424,6 @@ int set_entry(EXT2_FILESYSTEM * fs, EXT2_ENTRY_LOCATION *loc, EXT2_DIR_ENTRY *ne
 
 	if (loc->offset == 0 && GET_RECORD_LEN(entry) == 8) 
 	{
-		printf("first entry! (dot entry)\n");
 		new_entry->record_len = entry->record_len;
 		memcpy(entry, new_entry, GET_RECORD_LEN(new_entry));
 	}
@@ -691,6 +690,7 @@ int find_entry_at_block(const BYTE* block, const BYTE* formattedName, EXT2_DIR_E
 			if (memcmp(entry->name, formattedName, cmp_length) == 0) 
 			{
 				memcpy(dir_entry, entry, real_record_len);
+				printf("lookup entry inode : %u\n", entry->inode);
 				*offset = loc_offset;
 				return EXT2_SUCCESS;
 			}
@@ -943,11 +943,13 @@ int ext2_read_dir(EXT2_NODE* dir, EXT2_NODE_ADD adder, void* list)
 	INODE inode_buf;
 	UINT32 blk_idx = 0, block_num;
 
+	printf("search dir inode : %u\n", dir->entry.inode);
 	get_inode(dir->fs, dir->entry.inode, &inode_buf);
 
 	while (inode_buf.i_block[blk_idx] != 0)
 	{
 		block_num = inode_buf.i_block[blk_idx];
+		printf("dir entry block : %u\n", block_num);
 
 		get_block_location(dir->fs, block_num, &loc);
 		read_disk_per_block(dir->fs, loc.group, loc.block, block);
@@ -1015,6 +1017,7 @@ int ext2_mkdir(const EXT2_NODE* parent, const char* entryName, EXT2_NODE* retEnt
 		printf("alloc inode error\n");
 		return EXT2_ERROR;
 	}
+	printf("new inode : %u\n", new_inode);
 	
 	get_inode_location(parent->fs, new_inode, &loc);
 	read_disk_per_block(parent->fs, loc.group, loc.block, block);
@@ -1023,7 +1026,7 @@ int ext2_mkdir(const EXT2_NODE* parent, const char* entryName, EXT2_NODE* retEnt
 	inode_buf->link_cnt = 2; // ".", ".."
 	write_disk_per_block(parent->fs, loc.group, loc.block, block);
 
-	retEntry->entry.inode = parent->entry.inode;
+	retEntry->entry.inode = new_inode;
 	retEntry->entry.file_type = EXT2_FT_DIR;
 	retEntry->entry.name_len = strlen(entryName);
 	memcpy(retEntry->entry.name, entryName, retEntry->entry.name_len);

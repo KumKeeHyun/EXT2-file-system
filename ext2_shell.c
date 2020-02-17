@@ -299,7 +299,11 @@ int fs_lookup(DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, const SHELL_EN
 
 	shell_entry_to_ext2_entry(parent, &EXT2Parent);
 
+	printf("parent inode : %u\n", EXT2Parent.entry.inode);
+
 	if (result = ext2_lookup(&EXT2Parent, name, &EXT2Entry)) return result;
+
+	printf("child inode : %u\n", EXT2Entry.entry.inode);
 
 	ext2_entry_to_shell_entry(EXT2Parent.fs, &EXT2Entry, entry);
 
@@ -313,7 +317,9 @@ int fs_read_dir(DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, const SHELL_
 	if (list->count)
 		release_entry_list(list);
 
+	printf("shell entry to ext2 node\n");
 	shell_entry_to_ext2_entry(parent, &entry);
+	printf("entry inode : %u\n", entry.entry.inode);
 	ext2_read_dir(&entry, adder, list);
 
 	return EXT2_SUCCESS;
