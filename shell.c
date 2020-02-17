@@ -126,7 +126,7 @@ void do_shell( void )
 	while( -1 )
 	{
 		// shell 명령 입력
-		printf( "[%s/]# ", g_currentDir.name );
+		printf( "\n[%s/]# ", g_currentDir.name );
 		fgets( buf, 1000, stdin );
 
 		// 문자열을 argv[]로 나눔

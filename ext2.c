@@ -63,8 +63,6 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 	//BYTE block[MAX_SECTOR_SIZE * sector_per_block];
 	BYTE block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
 
-	BYTE *block_ptr = block;
-	printf ("%p\n",block_ptr);
 	ZeroMemory(block, sizeof(block));
 	memcpy(block, &sb, sizeof(sb));
 
@@ -201,7 +199,7 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 
 	PRINTF("max inode count                : %u\n", sb.max_inode_count);
 	PRINTF("total block count              : %u\n", sb.block_count);
-	PRINTF("byte size of inode structure   : %u\n", sb.inode_size);
+	PRINTF("byte size of inode             : %u\n", sb.inode_size);
 	PRINTF("block byte size                : %u\n", byte_per_block);
 	PRINTF("total sectors count            : %u\n", disk->number_of_sectors);
 	PRINTF("sector byte size               : %u\n", MAX_SECTOR_SIZE);
@@ -343,10 +341,6 @@ int create_root(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK * sb, EXT2_GROUP_DESCRIP
 	UINT32 block_bitmap_block = gd->start_block_of_block_bitmap;
 	UINT32 inode_table_block = gd->start_block_of_inode_table;
 	UINT32 root_entry_block = sb->first_meta_bg;
-
-	printf("block_bitmap    : %u\n", block_bitmap_block);
-	printf("inode_table     : %u\n", inode_table_block);
-	printf("root_entry      : %u\n", root_entry_block);
 
 	// set inode
 	ZeroMemory(block, sizeof(block));
@@ -551,7 +545,7 @@ int get_inode_location(EXT2_FILESYSTEM *fs, UINT32 inode_num, EXT2_ENTRY_LOCATIO
 	UINT32 table_index = (inode_num - 1) % inode_per_group;
 	UINT32 inode_per_block = (1024 << fs->sb.log_block_size) / fs->sb.inode_size;
 	// 128말고 fs->sb.inode_size 하면 안될까
-	
+
 	loc->group = (inode_num - 1) / inode_per_group;
 	loc->block = (table_index / inode_per_block) + fs->gd.start_block_of_inode_table;
 	loc->offset = table_index % inode_per_block;
@@ -690,7 +684,6 @@ int find_entry_at_block(const BYTE* block, const BYTE* formattedName, EXT2_DIR_E
 			if (memcmp(entry->name, formattedName, cmp_length) == 0) 
 			{
 				memcpy(dir_entry, entry, real_record_len);
-				printf("lookup entry inode : %u\n", entry->inode);
 				*offset = loc_offset;
 				return EXT2_SUCCESS;
 			}
@@ -807,7 +800,7 @@ int get_entry_loc_at_block(const unsigned char *block, const unsigned char *form
 	get_block_location(ret->fs, block_num, &ret->location);
 	ret->location.offset = offset;
 
-	printf("location : %u, %u, %u\n", ret->location.group, ret->location.block ,ret->location.offset);
+	//printf("location : %u, %u, %u\n", ret->location.group, ret->location.block ,ret->location.offset);
 	
 	return result;
 }
@@ -830,7 +823,6 @@ int read_root_sector(EXT2_FILESYSTEM* fs, EXT2_DIR_ENTRY *root)
 	memcpy(root->name, VOLUME_LABLE, root->name_len);
 	root->record_len = GET_RECORD_LEN(root);
 
-	printf("root record len : %u\n", root->record_len);
 	return EXT2_SUCCESS;
 }
 
@@ -866,10 +858,6 @@ int ext2_create(EXT2_NODE* parent, const char* entryName, EXT2_NODE* retEntry)
 
 	/* parent 에 retEntry 삽입 */
 	if (insert_entry(inode, retEntry) == EXT2_ERROR) return EXT2_ERROR;
-	
-	// 원래 써진 것 이상으로 해줘야할 일
-	// directory entry에 record_len, name_len, file_type 넣어줘야함
-	// ret entry에 location 등록해야함.
 
 	return EXT2_SUCCESS;
 }
@@ -933,6 +921,7 @@ int ext2_lookup(EXT2_NODE* parent, const char* entryName, EXT2_NODE* retEntry)
 	if (format_name(parent->fs, entryName) == EXT2_ERROR)
 		return EXT2_ERROR;
 	
+	retEntry->fs = parent->fs;
 	return lookup_entry(parent->fs, parent->entry.inode, entryName, retEntry);
 }
 
@@ -943,13 +932,11 @@ int ext2_read_dir(EXT2_NODE* dir, EXT2_NODE_ADD adder, void* list)
 	INODE inode_buf;
 	UINT32 blk_idx = 0, block_num;
 
-	printf("search dir inode : %u\n", dir->entry.inode);
 	get_inode(dir->fs, dir->entry.inode, &inode_buf);
 
 	while (inode_buf.i_block[blk_idx] != 0)
 	{
 		block_num = inode_buf.i_block[blk_idx];
-		printf("dir entry block : %u\n", block_num);
 
 		get_block_location(dir->fs, block_num, &loc);
 		read_disk_per_block(dir->fs, loc.group, loc.block, block);
@@ -1001,6 +988,7 @@ int ext2_mkdir(const EXT2_NODE* parent, const char* entryName, EXT2_NODE* retEnt
 	EXT2_NODE dot_node;
 	EXT2_ENTRY_LOCATION loc;
 	BYTE block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
+	BYTE *block_ptr = block;
 	UINT32 new_inode;
 
 	if (format_name(parent->fs, entryName) == EXT2_ERROR) {
@@ -1017,7 +1005,6 @@ int ext2_mkdir(const EXT2_NODE* parent, const char* entryName, EXT2_NODE* retEnt
 		printf("alloc inode error\n");
 		return EXT2_ERROR;
 	}
-	printf("new inode : %u\n", new_inode);
 	
 	get_inode_location(parent->fs, new_inode, &loc);
 	read_disk_per_block(parent->fs, loc.group, loc.block, block);
