@@ -527,6 +527,7 @@ int shell_cmd_cat( int argc, char* argv[] )
 		return 0;
 	}
 
+	/* 해당 파일이 존재하는지 확인 & 해당 entry return */
 	result = g_fsOprs.lookup( &g_disk, &g_fsOprs, &g_currentDir, &entry, argv[1] );
 	if( result )
 	{
@@ -534,6 +535,7 @@ int shell_cmd_cat( int argc, char* argv[] )
 		return -1;
 	}
 
+	/* 존재하면 해당 파일 1024 byte씩 읽어서 출력 */
 	while( (n = g_fsOprs.fileOprs->read( &g_disk, &g_fsOprs, &g_currentDir, &entry, offset, 1024, buf )) > 0 )
 	{
 		printf( "%s", buf );
