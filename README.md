@@ -4,65 +4,19 @@
 + [Contributors](#Contributors)
 + [Run GDBGUI](#RunGDBGUI)
 
-# BLANK 1
-
-blank
-
-blank
-
-blank
-
-blank
-
-blank
-
-blank
-
-blank
-
-blank
-
-blank
-
-blank
-
-blank
-
-blank
-
-blank
-
-blank
-
-blank
 # EXT2 File System <a name="EXT2FileSystem"></a>
 
-# BLANK 2
-
-blank
-
-blank
-
-blank
-
-blank
-
-blank
-
-blank
-
-blank
-
-blank
-
-blank
 
 
 
 ## How to use <a name="Howtouse"></a>
 
 
+
 ## Contributors
+
++ KumKeeHyun
++ iamhge
 
 
 ## Run GDBGUI <a name="RunGDBGUI"></a>
