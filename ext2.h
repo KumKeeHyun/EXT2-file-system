@@ -164,6 +164,7 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 block_size);
 int ext2_create(EXT2_NODE* parent, const char* entryName, EXT2_NODE* retEntry);
 int ext2_lookup(EXT2_NODE* parent, const char* entryName, EXT2_NODE* retEntry);
 int ext2_mkdir(const EXT2_NODE* parent, const char* entryName, EXT2_NODE* retEntry);
+int ext2_rmdir(EXT2_NODE *dir);
 int ext2_write(EXT2_NODE* file, unsigned long offset, unsigned long length, const char* buffer);
 
 typedef int(*EXT2_NODE_ADD)(EXT2_FILESYSTEM*,void*, EXT2_NODE*);
@@ -181,9 +182,10 @@ UINT32 scan_bitmap(BYTE *bitmap);
 UINT32 alloc_free_data_block_in_group(EXT2_FILESYSTEM *fs, UINT32 group);
 void free_data_block(EXT2_FILESYSTEM *fs, UINT32 block_num);
 UINT32 alloc_free_inode_in_group(EXT2_FILESYSTEM *fs, UINT32 group);
-void free_inode_in_group(EXT2_FILESYSTEM *fs, UINT32 inode_num);
+void free_inode(EXT2_FILESYSTEM *fs, UINT32 inode_num);
 
-UINT32 expand_block(EXT2_FILESYSTEM * fs, UINT32 inode_num, UINT32 is_dir);
+int set_new_inode(EXT2_FILESYSTEM *fs, UINT32 prefer_group, UINT32 is_dir);
+UINT32 expand_block(EXT2_FILESYSTEM * fs, UINT32 inode_num, UINT32 prefer_group, UINT32 is_dir);
 int fill_super_block(EXT2_SUPER_BLOCK * sb, SECTOR numberOfSectors, UINT32 bytesPerSector);
 int fill_descriptor_block(EXT2_GROUP_DESCRIPTOR * gd, EXT2_SUPER_BLOCK * sb, SECTOR numberOfSectors, UINT32 bytesPerSector);
 int create_root(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK * sb, EXT2_GROUP_DESCRIPTOR *gd);

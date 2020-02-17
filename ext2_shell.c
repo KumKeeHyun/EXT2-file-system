@@ -143,7 +143,7 @@ int fs_format(DISK_OPERATIONS* disk, void* param)
 static SHELL_FILE_OPERATIONS g_file =
 {
 	fs_create,
-	NULL,
+	fs_remove,
 	NULL,
 	fs_write
 };
@@ -249,9 +249,21 @@ int	fs_create(DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, const SHELL_EN
 	return result;
 }
 
+int	fs_remove(DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, const SHELL_ENTRY* parent, const char* name)
+{
+	EXT2_NODE EXT2Parent;
+	EXT2_NODE file;
+
+	shell_entry_to_ext2_entry(parent, &EXT2Parent);
+	ext2_lookup(&EXT2Parent, name, &file);
+
+	return ext2_remove(&file);
+}
+
 int shell_entry_to_ext2_entry(const SHELL_ENTRY* shell_entry, EXT2_NODE* fat_entry)
 {
 	EXT2_NODE* entry = (EXT2_NODE*)shell_entry->pdata;
+
 
 	*fat_entry = *entry;
 
@@ -393,6 +405,15 @@ int fs_mkdir(DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, const SHELL_ENT
 
 int fs_rmdir( DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, const SHELL_ENTRY* parent, const char* name)
 {
+	EXT2_NODE EXT2Parent;
+	EXT2_NODE dir;
+
+	shell_entry_to_ext2_entry(parent, &EXT2Parent);
+	if (ext2_lookup(&EXT2Parent, name, &dir) == EXT2_ERROR)
+	{
+		printf("can't find entry %s\n", name);
+		return EXT2_ERROR;
+	}
 	
-	return EXT2_ERROR;
+	return ext2_rmdir(&dir);
 }
