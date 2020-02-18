@@ -151,7 +151,7 @@ static SHELL_FILE_OPERATIONS g_file =
 static SHELL_FS_OPERATIONS   g_fsOprs =
 {
 	fs_read_dir,
-	NULL,
+	fs_stat,
 	fs_mkdir,
 	fs_rmdir,
 	fs_lookup,
@@ -196,9 +196,19 @@ int fs_mount(DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, SHELL_ENTRY* ro
 
 	return result;
 }
+
 void fs_umount(DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs)
 {
-	return;
+	// fsOprs -> pdata : FAT_FILESYSTEM
+	if( fsOprs && fsOprs->pdata ) // 마운트된 경우
+	{
+		// 1. 파일 시스템 언마운트
+		// ext2_umount( (EXT2_FILESYSTEM *)fsOprs->pdata );
+
+		// 2. pdata 할당 해제
+		free( fsOprs->pdata );
+		fsOprs->pdata = 0;
+	}
 }
 
 static SHELL_FILESYSTEM g_fat =
@@ -361,6 +371,14 @@ int fs_read_dir(DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, const SHELL_
 
 // 	return 0;
 // }
+
+int fs_stat( DISK_OPERATIONS* disk, struct SHELL_FS_OPERATIONS* fsOprs, unsigned int* total_sectors, unsigned int* used_sectors)
+{
+	EXT2_NODE entry;
+
+	return ext2_df( fsOprs->pdata, total_sectors, used_sectors);
+}
+
 
 int is_exist(DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, const SHELL_ENTRY* parent, const char* name)
 {

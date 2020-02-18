@@ -1647,3 +1647,15 @@ void free_inode(EXT2_FILESYSTEM *fs, UINT32 inode_num) {
 	(((volatile unsigned int *)bitmap)[offset>>5]) &= (0xFFFFFFFF ^ (1UL << (offset & 31)));
 	write_disk_per_block(fs, group, fs->gd.start_block_of_inode_bitmap, bitmap);
 }
+
+/******************************************************************************/
+/* Disk free spaces                                                           */
+/******************************************************************************/
+
+int ext2_df(EXT2_FILESYSTEM* fs, unsigned int* total_sectors, unsigned int* used_sectors)
+{
+	*total_sectors = fs->sb.block_count * SECTOR_PER_BLOCK;
+	*used_sectors = *total_sectors - (fs->sb.free_block_count * SECTOR_PER_BLOCK);
+	
+	return EXT2_SUCCESS;
+}
