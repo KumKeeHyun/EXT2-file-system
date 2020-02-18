@@ -10,58 +10,131 @@ typedef struct
 
 #define GET_RECORD_LEN(entry) 		((entry)->name_len + 8)
 
+
+// 임시 expand
+UINT32 expand_block_scope(EXT2_FILESYSTEM * fs, UINT32 inode_num, DWORD start, DWORD end, UINT32 prefer_group, UINT32 is_dir)
+{
+	INODE *inode_buf;
+	EXT2_ENTRY_LOCATION loc;
+	UINT32 i_blk_idx, new_block;
+	BYTE block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
+
+	get_inode_location(fs, inode_num, &loc);
+	read_disk_per_block(fs, loc.group, loc.block, block);
+	inode_buf = ((INODE *)block) + loc.offset;
+
+	if (start > end || start < 0 || 15 <= end) return EXT2_ERROR;
+
+	// 간접 i_block 추가구현 해야함 일단 고려 안하고 짬
+	for (i_blk_idx = start; i_blk_idx <= end; i_blk_idx++) {
+		if (inode_buf->i_block[i_blk_idx] == 0)
+			break;
+	}
+	if (i_blk_idx == 15) {
+		printf("i_blocks full\n");
+		return EXT2_ERROR;
+	}
+
+	// group 임시로 0으로 해놓음 수정해야함
+	new_block = alloc_free_data_block_in_group(fs, 0);
+	if (new_block == -1) {
+		printf("alloc block error\n");
+		return EXT2_ERROR;
+	}
+	
+	inode_buf->block_cnt++;
+
+	inode_buf->i_block[i_blk_idx] = new_block;
+	write_disk_per_block(fs, loc.group, loc.block, block);
+
+	ZeroMemory(block, sizeof(block));
+
+	if (is_dir == EXT2_FT_DIR) 
+	{
+		((EXT2_DIR_ENTRY *)block)->record_len = (MAX_SECTOR_SIZE * SECTOR_PER_BLOCK);
+	}
+
+	get_block_location(fs, new_block, &loc);
+	write_disk_per_block(fs, loc.group, loc.block, block);
+
+	return EXT2_SUCCESS;
+}
+
 int ext2_write(EXT2_NODE* file, unsigned long offset, unsigned long length, const char* buffer)
 {
-	DWORD	current_offset;
+	DWORD	current_offset, current_block;
 	DWORD	block_number; // 실제 블록 넘버말고 논리적인 블록 순서
+	DWORD	start_block_number;
 	DWORD	read_end;
 	DWORD	block_offset = 0;
 
 	BYTE block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
-	UINT32 byte_per_block = 1024 << LOG_BLOCK_SIZE;
+	UINT32 byte_per_block = 1024 << LOG_BLOCK_SIZE; // MAX_SECTOR_SIZE * SECTOR_PER_BLOCK
 	EXT2_DIR_ENTRY *entry = &file->entry;
-	INODE inode;
-	int i_block_index;
+	INODE *inode_ptr;
+	EXT2_ENTRY_LOCATION loc;
 
-	get_inode(file->fs, entry->inode, &inode);
 	read_end = offset + length;
-
 	current_offset = offset;
+	start_block_number = offset / byte_per_block;
+	block_number = read_end / byte_per_block;
 
-	block_number = offset / byte_per_block;
-	
-	i_block_index = get_i_block_index_by_logical_block_num(block_number);
-	while (block_number != inode.block_cnt)
-	{
-		expand_block(file->fs, entry->inode, EXT2_FT_UNKNOWN); // 먼 파일 쓸 지멀라서 걍이거함.
+	// start_block_number 에서부터 block_number까지 할당 안돼있으면 할당해줘야함.
+	for (int i = start_block_number ; i <= block_number ; i++)
+	{ 
+		// 나중에 0 수정할 것.
+
+		/*if (expand_block(file->fs, entry->inode, 0, EXT2_FT_UNKNOWN) == EXT2_ERROR)
+		{
+			printf("Can't expand block.\n");
+			return EXT2_ERROR;
+		}*/
+
+		// 임시
+		expand_block_scope(file->fs, entry->inode, start_block_number, block_number, 0, EXT2_FT_REG_FILE); 
+		//get_inode(file->fs, entry->inode, &inode_ptr); // 이거 나중에 이 줄 없애게 수정?
 	}
-
 
 	while (current_offset < read_end)
 	{
 		DWORD copy_length;
 
-		block_number = current_offset / byte_per_block;
+		current_block = current_offset / byte_per_block;
 		block_offset = current_offset % byte_per_block;
 
 		copy_length =  MIN(byte_per_block - block_offset, read_end - current_offset);
 
-		// 어쨋든 block 읽어와서 쓴 다음 그거 write
-		
-		read_data_by_logical_block_num(file->fs, entry->inode, block_number, block);
+		// 어쨋든 block 읽어와서 copy_length만큼 쓴 다음 그거 write
+		if (read_data_by_logical_block_num(file->fs, entry->inode, current_block, block) == EXT2_ERROR)
+		{
+			printf("read_data_by_logical_block_num() function error.\n");
+			return EXT2_ERROR;
+		}
 		memcpy(&block[block_offset], buffer, copy_length);
-		write_data_by_logical_block_num(file->fs, entry->inode, block_number, block);
+		if( write_data_by_logical_block_num(file->fs, entry->inode, current_block, block) == EXT2_ERROR)
+		{
+			printf("write_data_by_logical_block_num() function error.\n");
+			return EXT2_ERROR;
+		}
+		
+		get_inode_location(file->fs, entry->inode, &loc);
+		read_disk_per_block(file->fs, loc.group, loc.block, block); // block 버퍼 재활용
+
+		inode_ptr = ((INODE*)block) + loc.offset;
+		inode_ptr->size += copy_length;
 
 		buffer += copy_length;
 		current_offset += copy_length;
 	}
+
+	write_disk_per_block(file->fs, loc.group, loc.block, block);
 
 	return current_offset - offset;
 }
 
 int ext2_read(EXT2_NODE* file, unsigned long offset, unsigned long length, const char* buffer)
 {
-	DWORD	current_offset, block_seq = 0;
+	DWORD	current_offset;
 	DWORD	block_number; // 실제 블록 넘버말고 논리적인 블록 순서
 	DWORD	read_end;
 	DWORD	block_offset = 0;
@@ -78,7 +151,6 @@ int ext2_read(EXT2_NODE* file, unsigned long offset, unsigned long length, const
 	current_offset = offset;
 
 	block_number = offset / byte_per_block;
-	block_seq = block_number;
 
 	while (current_offset < read_end)
 	{
@@ -88,7 +160,11 @@ int ext2_read(EXT2_NODE* file, unsigned long offset, unsigned long length, const
 		block_offset = current_offset % byte_per_block;
 	
 		// block_number 에 따라서 data block 가져오기 
-		read_data_by_logical_block_num(file->fs, entry->inode, block_number , block);
+		if (read_data_by_logical_block_num(file->fs, entry->inode, block_number , block) == EXT2_ERROR)
+		{
+			printf("read_data_by_logical_block_num() function error.\n");
+			return EXT2_ERROR;
+		}
 
 		copy_length =  MIN(byte_per_block - block_offset, read_end - current_offset);
 
@@ -129,6 +205,11 @@ int read_data_by_logical_block_num(EXT2_FILESYSTEM* fs, const int inode_num, UIN
 
 	i_block_index = get_i_block_index_by_logical_block_num(logical_block_num);
 
+	if (i_block_index < 0 || 15 <= i_block_index)
+	{
+		return EXT2_ERROR;
+	}
+
 	// inode.i_block[i_block_index] 번째 block, block 버퍼에 저장
 	UINT32 block_num = inode.i_block[i_block_index];
 	EXT2_ENTRY_LOCATION loc;
@@ -136,7 +217,7 @@ int read_data_by_logical_block_num(EXT2_FILESYSTEM* fs, const int inode_num, UIN
 	
 	if (!inode.i_block[i_block_index])
 	{
-		printf("그런 블록 또 없습니다~\n");
+		printf("그런 블록 또 없습니다~\n"); // 나중에 삭제
 		return EXT2_ERROR;
 	}
 
@@ -203,6 +284,8 @@ int read_data_by_logical_block_num(EXT2_FILESYSTEM* fs, const int inode_num, UIN
 				return EXT2_SUCCESS;
 		} // switch문 종료	
 	}
+	
+	return EXT2_ERROR;
 }
 
 int write_data_by_logical_block_num(EXT2_FILESYSTEM* fs, const int inode_num, UINT32 logical_block_num , BYTE* block_buf)
@@ -223,7 +306,7 @@ int write_data_by_logical_block_num(EXT2_FILESYSTEM* fs, const int inode_num, UI
 
 	if (!inode.i_block[i_block_index])
 	{
-		printf("그런 블록 또 없습니다~\n");
+		printf("그런 블록 또 없습니다~\n"); //나중에 삭제
 		return EXT2_ERROR;
 	}
 	if (i_block_index < 12)
@@ -291,7 +374,10 @@ int write_data_by_logical_block_num(EXT2_FILESYSTEM* fs, const int inode_num, UI
 				return EXT2_SUCCESS;
 		} // switch문 종료	
 	}
+	return EXT2_ERROR;
 }
+
+
 
 UINT32 get_free_inode_number(EXT2_FILESYSTEM* fs);
 
@@ -788,6 +874,8 @@ UINT32 expand_block(EXT2_FILESYSTEM * fs, UINT32 inode_num, UINT32 prefer_group,
 		printf("alloc block error\n");
 		return EXT2_ERROR;
 	}
+	
+	inode_buf->block_cnt++;
 
 	inode_buf->i_block[i_blk_idx] = new_block;
 	write_disk_per_block(fs, loc.group, loc.block, block);
