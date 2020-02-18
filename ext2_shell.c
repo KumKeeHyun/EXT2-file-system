@@ -143,7 +143,7 @@ int fs_format(DISK_OPERATIONS* disk, void* param)
 static SHELL_FILE_OPERATIONS g_file =
 {
 	fs_create,
-	NULL,
+	fs_remove,
 	fs_read,
 	fs_write
 };
@@ -178,14 +178,14 @@ int fs_mount(DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, SHELL_ENTRY* ro
 
 	if (result == EXT2_SUCCESS)
 	{
-		printf("number of groups         : %d\n", number_of_group);
-		printf("blocks per group         : %d\n", fs->sb.block_per_group);
-		printf("bytes per block          : %d\n", disk->bytes_per_sector);
-		printf("free block count	 	 : %d\n", fs->sb.free_block_count);
-		printf("free inode count	 	 : %d\n", fs->sb.free_inode_count);
-		printf("first non reserved inode : %d\n", fs->sb.first_ino);
-		printf("inode structure size	 : %d\n", fs->sb.inode_size);
-		printf("first data block number  : %d\n", fs->sb.first_meta_bg);
+		printf("number of groups               : %d\n", number_of_group);
+		printf("blocks per group               : %d\n", fs->sb.block_per_group);
+		printf("bytes per block                : %d\n", disk->bytes_per_sector);
+		printf("free block count               : %d\n", fs->sb.free_block_count);
+		printf("free inode count               : %d\n", fs->sb.free_inode_count);
+		printf("first non reserved inode       : %d\n", fs->sb.first_ino);
+		printf("inode structure size           : %d\n", fs->sb.inode_size);
+		printf("first data block number        : %d\n", fs->sb.first_meta_bg);
 		printf("\n----------------------------------------------\n");
 	}
 
@@ -258,9 +258,21 @@ int	fs_create(DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, const SHELL_EN
 	return result;
 }
 
+int	fs_remove(DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, const SHELL_ENTRY* parent, const char* name)
+{
+	EXT2_NODE EXT2Parent;
+	EXT2_NODE file;
+
+	shell_entry_to_ext2_entry(parent, &EXT2Parent);
+	ext2_lookup(&EXT2Parent, name, &file);
+
+	return ext2_remove(&file);
+}
+
 int shell_entry_to_ext2_entry(const SHELL_ENTRY* shell_entry, EXT2_NODE* fat_entry)
 {
 	EXT2_NODE* entry = (EXT2_NODE*)shell_entry->pdata;
+
 
 	*fat_entry = *entry;
 
@@ -308,13 +320,8 @@ int fs_lookup(DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, const SHELL_EN
 
 	shell_entry_to_ext2_entry(parent, &EXT2Parent);
 
-
-	printf("parent inode : %u\n", EXT2Parent.entry.inode);
-
 	if (result = ext2_lookup(&EXT2Parent, name, &EXT2Entry)) return result;
 
-	printf("child inode : %u\n", EXT2Entry.entry.inode);
-  
 	ext2_entry_to_shell_entry(EXT2Parent.fs, &EXT2Entry, entry);
 
 	return result;
@@ -327,9 +334,7 @@ int fs_read_dir(DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, const SHELL_
 	if (list->count)
 		release_entry_list(list);
 
-	printf("shell entry to ext2 node\n");
 	shell_entry_to_ext2_entry(parent, &entry);
-	printf("entry inode : %u\n", entry.entry.inode);
 	ext2_read_dir(&entry, adder, list);
 
 	return EXT2_SUCCESS;
@@ -409,6 +414,15 @@ int fs_mkdir(DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, const SHELL_ENT
 
 int fs_rmdir( DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, const SHELL_ENTRY* parent, const char* name)
 {
+	EXT2_NODE EXT2Parent;
+	EXT2_NODE dir;
+
+	shell_entry_to_ext2_entry(parent, &EXT2Parent);
+	if (ext2_lookup(&EXT2Parent, name, &dir) == EXT2_ERROR)
+	{
+		printf("can't find entry %s\n", name);
+		return EXT2_ERROR;
+	}
 	
-	return EXT2_ERROR;
+	return ext2_rmdir(&dir);
 }
