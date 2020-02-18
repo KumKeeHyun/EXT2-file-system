@@ -20,15 +20,22 @@ int ext2_write(EXT2_NODE* file, unsigned long offset, unsigned long length, cons
 	BYTE block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
 	UINT32 byte_per_block = 1024 << LOG_BLOCK_SIZE;
 	EXT2_DIR_ENTRY *entry = &file->entry;
-	INODE *inode;
+	INODE inode;
 	int i_block_index;
 
-	get_inode(file->fs, entry->inode, inode);
+	get_inode(file->fs, entry->inode, &inode);
 	read_end = offset + length;
 
 	current_offset = offset;
 
 	block_number = offset / byte_per_block;
+	
+	i_block_index = get_i_block_index_by_logical_block_num(block_number);
+	while (block_number != inode.block_cnt)
+	{
+		expand_block(file->fs, entry->inode, EXT2_FT_UNKNOWN); // 먼 파일 쓸 지멀라서 걍이거함.
+	}
+
 
 	while (current_offset < read_end)
 	{
@@ -40,6 +47,7 @@ int ext2_write(EXT2_NODE* file, unsigned long offset, unsigned long length, cons
 		copy_length =  MIN(byte_per_block - block_offset, read_end - current_offset);
 
 		// 어쨋든 block 읽어와서 쓴 다음 그거 write
+		
 		read_data_by_logical_block_num(file->fs, entry->inode, block_number, block);
 		memcpy(&block[block_offset], buffer, copy_length);
 		write_data_by_logical_block_num(file->fs, entry->inode, block_number, block);
@@ -207,11 +215,6 @@ int write_data_by_logical_block_num(EXT2_FILESYSTEM* fs, const int inode_num, UI
 	get_inode(fs, inode_num, &inode);
 
 	i_block_index = get_i_block_index_by_logical_block_num(logical_block_num);
-
-	while (logical_block_num != inode.block_cnt)
-	{
-		expand_block(fs, inode_num, EXT2_FT_UNKNOWN); // 먼 파일 쓸 지멀라서 걍이거함.
-	}
 
 	// inode.i_block[i_block_index] 번째 block, block 버퍼에 저장
 	UINT32 block_num = inode.i_block[i_block_index];
