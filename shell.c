@@ -44,17 +44,17 @@ static COMMAND g_commands[] =
 	{ "exit",	shell_cmd_exit,		0			}, // 끝
 	{ "quit",	shell_cmd_exit,		0			}, // 끝
 	{ "mount",	shell_cmd_mount,	COND_UMOUNT	}, // 끝
-	{ "umount",	shell_cmd_umount,	COND_MOUNT	}, // 끝
+	{ "umount",	shell_cmd_umount,	COND_MOUNT	},
 	{ "touch",	shell_cmd_touch,	COND_MOUNT	}, // 끝
 	{ "fill",	shell_cmd_fill,		COND_MOUNT	},
 	{ "rm",		shell_cmd_rm,		COND_MOUNT	}, // 끝
 	{ "ls",		shell_cmd_ls,		COND_MOUNT	}, // 끝
 	{ "dir",	shell_cmd_ls,		COND_MOUNT	}, // 끝
 	{ "format",	shell_cmd_format,	COND_UMOUNT	}, // 끝
-	{ "df",		shell_cmd_df,		COND_MOUNT	}, // 끝
+	{ "df",		shell_cmd_df,		COND_MOUNT	},
 	{ "mkdir",	shell_cmd_mkdir,	COND_MOUNT	}, // 끝
-	{ "rmdir",	shell_cmd_rmdir,	COND_MOUNT	}, // 끝
-	{ "mkdirst",shell_cmd_mkdirst,	COND_MOUNT	}, // 끝
+	{ "rmdir",	shell_cmd_rmdir,	COND_MOUNT	}, // is_empty_dir 알고리즘 수정해야 함
+	{ "mkdirst",shell_cmd_mkdirst,	COND_MOUNT	},
 	{ "cat",	shell_cmd_cat,		COND_MOUNT	}
 };
 

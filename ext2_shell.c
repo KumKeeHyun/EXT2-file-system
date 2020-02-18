@@ -264,8 +264,9 @@ int	fs_remove(DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, const SHELL_EN
 	EXT2_NODE file;
 
 	shell_entry_to_ext2_entry(parent, &EXT2Parent);
-	ext2_lookup(&EXT2Parent, name, &file);
-
+	if (ext2_lookup(&EXT2Parent, name, &file) == EXT2_ERROR)
+		return EXT2_ERROR;
+		
 	return ext2_remove(&file);
 }
 
@@ -336,7 +337,7 @@ int fs_read_dir(DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, const SHELL_
 
 	shell_entry_to_ext2_entry(parent, &entry);
 	ext2_read_dir(&entry, adder, list);
-
+	
 	return EXT2_SUCCESS;
 }
 
