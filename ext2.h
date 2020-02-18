@@ -183,6 +183,7 @@ UINT32 alloc_free_data_block_in_group(EXT2_FILESYSTEM *fs, UINT32 group);
 void free_data_block(EXT2_FILESYSTEM *fs, UINT32 block_num);
 UINT32 alloc_free_inode_in_group(EXT2_FILESYSTEM *fs, UINT32 group);
 void free_inode(EXT2_FILESYSTEM *fs, UINT32 inode_num);
+int free_inode_and_blocks(EXT2_FILESYSTEM *fs, UINT32 inode_num);
 
 int set_new_inode(EXT2_FILESYSTEM *fs, UINT32 prefer_group, UINT32 is_dir);
 UINT32 expand_block(EXT2_FILESYSTEM * fs, UINT32 inode_num, UINT32 prefer_group, UINT32 is_dir);

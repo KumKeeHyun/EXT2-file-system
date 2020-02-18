@@ -909,9 +909,6 @@ int ext2_create(EXT2_NODE* parent, const char* entryName, EXT2_NODE* retEntry)
 
 int ext2_remove(EXT2_NODE *file)
 {
-	int blk_idx;
-	INODE inode_buf;
-
 	if (file->entry.file_type == EXT2_FT_DIR) {
 		printf("it is not file\n");
 		return EXT2_ERROR;
@@ -919,7 +916,17 @@ int ext2_remove(EXT2_NODE *file)
 
 	remove_entry(file->fs, &(file->location));
 
-	get_inode(file->fs, file->entry.inode, &inode_buf);
+	free_inode_and_blocks(file->fs, file->entry.inode);
+
+	return EXT2_SUCCESS;
+}
+
+int free_inode_and_blocks(EXT2_FILESYSTEM *fs, UINT32 inode_num)
+{
+	int blk_idx;
+	INODE inode_buf;
+
+	get_inode(fs, inode_num, &inode_buf);
 
 	for (blk_idx = 0; blk_idx < 15; blk_idx++) {
 		switch (blk_idx)
@@ -929,11 +936,11 @@ int ext2_remove(EXT2_NODE *file)
 		case 14: ;
 		default:
 			if (inode_buf.i_block[blk_idx])
-				free_data_block(file->fs, inode_buf.i_block[blk_idx]);
+				free_data_block(fs, inode_buf.i_block[blk_idx]);
 			break;
 		}
 	}
-	free_inode(file->fs, file->entry.inode);
+	free_inode(fs, inode_num);
 
 	return EXT2_SUCCESS;
 }
@@ -1010,6 +1017,7 @@ int ext2_read_dir(EXT2_NODE* dir, EXT2_NODE_ADD adder, void* list)
 
 	get_inode(dir->fs, dir->entry.inode, &inode_buf);
 
+	// 여기도 indirect block 구현해야 함
 	while (inode_buf.i_block[blk_idx] != 0)
 	{
 		block_num = inode_buf.i_block[blk_idx];
@@ -1132,7 +1140,9 @@ int ext2_rmdir(EXT2_NODE *dir)
 	{
 		printf("it is not directory\n");
 		return EXT2_ERROR;
-	}
+	}	
+
+	get_inode(dir->fs, dir->entry.inode, &inode_buf);
 
 	if (is_empty_dir(dir->fs, &inode_buf) == EXT2_ERROR)
 	{
@@ -1145,21 +1155,8 @@ int ext2_rmdir(EXT2_NODE *dir)
 
 	remove_entry(dir->fs, &(dir->location));
 
-	get_inode(dir->fs, dir->entry.inode, &inode_buf);
 
-	for (blk_idx = 0; blk_idx < 15; blk_idx++) {
-		switch (blk_idx)
-		{
-		case 12: ;
-		case 13: ;
-		case 14: ;
-		default:
-			if (inode_buf.i_block[blk_idx])
-				free_data_block(dir->fs, inode_buf.i_block[blk_idx]);
-			break;
-		}
-	}
-	free_inode(dir->fs, dir->entry.inode);
+	free_inode_and_blocks(dir->fs, dir->entry.inode);
 
 	return EXT2_SUCCESS;
 }
