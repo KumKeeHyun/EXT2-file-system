@@ -15,6 +15,137 @@ int ext2_write(EXT2_NODE* file, unsigned long offset, unsigned long length, cons
 	return 0;
 }
 
+int ext2_read(EXT2_NODE* file, unsigned long offset, unsigned long length, const char* buffer)
+{
+	DWORD	current_offset, block_seq = 0;
+	DWORD	block_number; // 실제 블록 넘버말고 논리적인 블록 순서
+	DWORD	read_end;
+	DWORD	block_offset = 0;
+
+	BYTE block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
+	UINT32 byte_per_block = 1024 << LOG_BLOCK_SIZE;
+	EXT2_DIR_ENTRY *entry = &file->entry;
+	INODE inode;
+	int i_block_index;
+
+	get_inode(file->fs, entry->inode, &inode);
+	read_end = MIN(offset + length, inode.size);
+
+	current_offset = offset;
+
+	block_number = offset / byte_per_block;
+	block_seq = block_number;
+
+	while (current_offset < read_end)
+	{
+		DWORD copy_length;
+
+		block_number = current_offset / byte_per_block;
+		block_offset = current_offset % byte_per_block;
+	
+		// block_number 에 따라서 data block 가져오기 
+		get_data_block_by_logical_block_num(file->fs, entry->inode, block_number , block);
+
+		copy_length =  MIN(byte_per_block - block_offset, read_end - current_offset);
+
+		memcpy(buffer, block[block_offset], copy_length);
+
+		buffer += copy_length;
+		current_offset += copy_length;
+	}
+
+	return current_offset - offset;
+}
+
+int get_i_block_index_by_logical_block_num(int block_number)
+{
+	UINT32 i_block_index;
+
+	if (0<=block_number && block_number < 12) 
+		i_block_index = block_number;
+	else if (12 <= block_number && block_number < 12 + 256) 
+		i_block_index = 12;  
+	else if (12 + 256 <= block_number && block_number < 12 + 256 + 256*256)
+		i_block_index = 13;
+	else if (12 + 256 + 256*256 <= block_number && block_number < 12 + 256 + 256*256 + 256*256*256) 
+		i_block_index = 14;
+	
+	return i_block_index;
+}
+
+int get_data_block_by_logical_block_num(EXT2_FILESYSTEM* fs, const int inode_num, UINT32 logical_block_num , BYTE* block_buf)
+{
+	BYTE block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
+	INODE inode;
+	UINT32 byte_per_block = 1024 << LOG_BLOCK_SIZE;
+	UINT32 i_block_index = logical_block_num;
+
+	get_inode(fs, inode_num, &inode);
+
+	i_block_index = get_i_block_index_by_logical_block_num(logical_block_num);
+
+	// inode.i_block[i_block_index] 번째 block, block 버퍼에 저장
+	UINT32 block_num = inode.i_block[i_block_index];
+	EXT2_ENTRY_LOCATION loc;
+	get_block_location(fs, block_num, &loc);
+	read_disk_per_block(fs, loc.group, loc.block, block);
+
+	if (!inode.i_block[i_block_index])
+	{
+		printf("그런 블록 또 없습니다~\n");
+		return EXT2_ERROR;
+	}
+	// && ~ : i_block에 block이 할당된 경우
+	if (i_block_index < 12)
+	{
+		memcpy(block_buf, block, sizeof(block));
+		return EXT2_SUCCESS;
+	}
+	else if (i_block_index >= 12) // 뒤에 아직 구현 대충
+	{
+		int block_offset_1, block_offset_2, block_offset_3;
+		int max_block_offset = byte_per_block / sizeof(int *);
+		BYTE file_block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
+		BYTE file_block_2[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
+		BYTE file_block_3[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
+
+		switch(i_block_index)
+		{
+			case 12: // 단일 간접
+				block_offset_1 = logical_block_num - 12;
+			
+				*(int *)( block[block_offset_1] ) = file_block;
+				
+
+				memcpy(block_buf, file_block, sizeof(file_block));
+				
+				return EXT2_SUCCESS;
+			case 13: // 이중 간접
+				block_offset_2 = (logical_block_num - max_block_offset - 12) / max_block_offset;
+				block_offset_1 = (logical_block_num - max_block_offset - 12) % max_block_offset;
+
+				*(int *)( block[block_offset_2] ) = file_block_2;
+				*(int *)( file_block_2[block_offset_1] ) = file_block;
+				
+				memcpy(block_buf, file_block, sizeof(file_block));
+				
+				return EXT2_SUCCESS;
+			case 14: // 삼중 간접
+				block_offset_3 = (logical_block_num - max_block_offset*max_block_offset - max_block_offset - 12) / (max_block_offset*max_block_offset);
+				block_offset_2 = (logical_block_num - max_block_offset*max_block_offset - max_block_offset - 12) / max_block_offset;
+				block_offset_1 = (logical_block_num - max_block_offset - 12) % max_block_offset;
+				
+				*(int *)( block[block_offset_3] ) = file_block_3;
+				*(int *)( file_block_3[block_offset_2] ) = file_block_2;
+				*(int *)( file_block_2[block_offset_1] ) = file_block;
+
+				memcpy(block_buf, file_block, sizeof(file_block));
+				
+				return EXT2_SUCCESS;
+		} // switch문 종료	
+	}
+}
+
 UINT32 get_free_inode_number(EXT2_FILESYSTEM* fs);
 
 int write_block(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK* sb, BYTE* block, unsigned int start_block)
@@ -687,6 +818,7 @@ int format_name(EXT2_FILESYSTEM* fs, const char* name)
 	return EXT2_SUCCESS;
 }
 
+
 // null : 새로운 entry가 들어갈 자리를 포함하는 entry의 location 정보
 // name : name에 해당하는 entry의 location 정보
 // 둘다 못찾았으면 ERROR 리턴 (어차피 entry의 끝은 i_block이 0인것을 검사해서 확인할 수 있음) 
@@ -702,21 +834,25 @@ int find_entry_at_block(const BYTE* block, const BYTE* formattedName, EXT2_DIR_E
 	block_end = block_offset + 1024;
 
 	while (block_offset != block_end)
+
 	{
 		entry = (EXT2_DIR_ENTRY *)block_offset;
 		real_record_len = GET_RECORD_LEN(entry);
 
 		if (formattedName == NULL) // 빈자리 찾기
 		{
+
 			hole_len = entry->record_len - real_record_len;
 			if ((hole_len > 0) && ((GET_RECORD_LEN(dir_entry)) <= hole_len))
 			{
 				*offset = loc_offset;
+
 				return EXT2_SUCCESS;
 			}
 		}
 		else // 엔트리 찾기
 		{
+
 			cmp_length = MAX((size_t)(entry->name_len), strlen(formattedName));
 			if (memcmp(entry->name, formattedName, cmp_length) == 0) 
 			{
@@ -735,7 +871,7 @@ int find_entry_at_block(const BYTE* block, const BYTE* formattedName, EXT2_DIR_E
 
 int lookup_entry(EXT2_FILESYSTEM* fs, const int inode_num, const char* formattedName, EXT2_NODE* ret)
 {
-	// 모든 그룹을 다 돌아야됨.
+	// dir 만드는 경우..모든 그룹을 다 돌아야됨.
 	BYTE block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
 	int i_block_index;
 	INODE inode;
@@ -941,6 +1077,7 @@ int free_inode_and_blocks(EXT2_FILESYSTEM *fs, UINT32 inode_num)
 		}
 	}
 	free_inode(fs, inode_num);
+
 
 	return EXT2_SUCCESS;
 }

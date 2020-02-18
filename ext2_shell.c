@@ -144,7 +144,7 @@ static SHELL_FILE_OPERATIONS g_file =
 {
 	fs_create,
 	fs_remove,
-	NULL,
+	fs_read,
 	fs_write
 };
 
@@ -218,6 +218,15 @@ int adder(EXT2_FILESYSTEM* fs, void* list, EXT2_NODE* entry)
 	add_entry_list(entryList, &newEntry);
 
 	return EXT2_SUCCESS;
+}
+
+int fs_read(DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, const SHELL_ENTRY* parent, SHELL_ENTRY* entry, unsigned long offset, unsigned long length, const char* buffer)
+{
+	EXT2_NODE EXT2Entry;
+
+	shell_entry_to_ext2_entry(entry, &EXT2Entry);
+
+	return ext2_read(&EXT2Entry, offset, length, buffer);
 }
 
 int fs_write(DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, const SHELL_ENTRY* parent, SHELL_ENTRY* entry, unsigned long offset, unsigned long length, const char* buffer)
