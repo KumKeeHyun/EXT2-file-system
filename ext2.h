@@ -196,4 +196,6 @@ void process_meta_data_for_block_used(EXT2_FILESYSTEM * fs, UINT32 inode_num);
 int lookup_entry(EXT2_FILESYSTEM* fs, const int inode_num, const char* formattedName, EXT2_NODE* ret);
 int get_entry_loc_at_block(const unsigned char *block, const unsigned char *formattedName, UINT32 block_num, EXT2_NODE* ret);
 
+int ext2_df(EXT2_FILESYSTEM* fs, unsigned int* total_sectors, unsigned int* used_sectors);
+
 #endif // _EXT2_H_
