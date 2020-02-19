@@ -417,6 +417,7 @@ int read_block(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK* sb, BYTE* block, unsigne
 	return EXT2_SUCCESS;
 }
 
+// 나중에 수정 : log_block_size는 define해줬으니까 삭제 해야함.
 int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 {
 	EXT2_SUPER_BLOCK sb;
