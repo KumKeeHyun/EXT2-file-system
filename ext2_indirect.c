@@ -61,7 +61,7 @@ int rw_indirect_func(EXT2_FILESYSTEM *fs, int level, UINT32 blk, Indirect_Locati
 
         indir_blk = (UINT32 *)block;
         if (indir_blk[i_loc->indir_idx[level]]) {
-            result = indirect_func(fs, level-1, indir_blk[i_loc->indir_idx[level]], f_ptr, argv);
+            result = rw_indirect_func(fs, level-1, indir_blk[i_loc->indir_idx[level]], i_loc,f_ptr, argv);
             if (result == EXT2_SUCCESS) 
                 return result;
         }
