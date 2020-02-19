@@ -6,7 +6,7 @@
 
 typedef int (generic) (void *);
 
-// 공통을 쓰이는 전달인자들 들
+// 공통을 쓰이는 전달인자들
 // ex) block_num
 typedef struct {
     EXT2_FILESYSTEM *fs;

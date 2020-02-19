@@ -35,7 +35,7 @@ typedef struct SHELL_ENTRY
 
 	/* SHELL_ENTRY would be created frequently.
 	 * In that case, dynamic allocation of a private data is not efficient	*/
-	char				pdata[1024];
+	char				pdata[1024];  // EXT2_NODE pointing한다.
 } SHELL_ENTRY;
 
 typedef struct SHELL_ENTRY_LIST_ITEM

@@ -168,7 +168,7 @@ int ext2_read_superblock(EXT2_FILESYSTEM* fs, EXT2_NODE* root);
 int ext2_read_dir(EXT2_NODE* dir, EXT2_NODE_ADD adder, void* list);
 void ext2_print_entry_name(EXT2_NODE *entry);
 
-int insert_entry(UINT32 inode_num, EXT2_NODE * retEntry);
+int insert_entry(INODE* inode, EXT2_NODE * retEntry);
 int set_entry(EXT2_FILESYSTEM * fs, EXT2_ENTRY_LOCATION *loc, EXT2_DIR_ENTRY *new_entry);
 int read_dir_from_block(EXT2_FILESYSTEM* fs, EXT2_ENTRY_LOCATION *loc, BYTE* block, EXT2_NODE_ADD adder, void* list);
 int format_name(EXT2_FILESYSTEM* fs, const char* name);
@@ -188,7 +188,7 @@ int create_root(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK * sb, EXT2_GROUP_DESCRIP
 void process_meta_data_for_block_used(EXT2_FILESYSTEM * fs, UINT32 inode_num);
 
 
-int lookup_entry(EXT2_FILESYSTEM* fs, const int inode_num, const char* formattedName, EXT2_NODE* ret);
+int lookup_entry(EXT2_FILESYSTEM* fs, INODE* inode_num, const char* formattedName, EXT2_NODE* ret);
 int get_entry_loc_at_block(const unsigned char *block, const unsigned char *formattedName, UINT32 block_num, EXT2_NODE* ret);
 
 int ext2_df(EXT2_FILESYSTEM* fs, unsigned int* total_sectors, unsigned int* used_sectors);

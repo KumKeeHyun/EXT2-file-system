@@ -219,6 +219,7 @@ static SHELL_FILESYSTEM g_fat =
 	fs_format
 };
 
+// entry(ext2)를 list(shell)에 추가
 int adder(EXT2_FILESYSTEM* fs, void* list, EXT2_NODE* entry)
 {
 	SHELL_ENTRY_LIST*   entryList = (SHELL_ENTRY_LIST*)list;
@@ -338,13 +339,14 @@ int fs_lookup(DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, const SHELL_EN
 	return result;
 }
 
+// parent 디렉토리를 읽어와 list에 저장
 int fs_read_dir(DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, const SHELL_ENTRY* parent, SHELL_ENTRY_LIST* list)
 {
 	EXT2_NODE   entry;
 
 	if (list->count)
 		release_entry_list(list);
-
+	
 	shell_entry_to_ext2_entry(parent, &entry);
 	ext2_read_dir(&entry, adder, list);
 	
@@ -379,17 +381,17 @@ int fs_stat( DISK_OPERATIONS* disk, struct SHELL_FS_OPERATIONS* fsOprs, unsigned
 	return ext2_df( fsOprs->pdata, total_sectors, used_sectors);
 }
 
-
+// parent 디렉토리에 name 파일 있는 지 검사
 int is_exist(DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, const SHELL_ENTRY* parent, const char* name)
 {
 	SHELL_ENTRY_LIST      list;
 	SHELL_ENTRY_LIST_ITEM*   current;
 
 	init_entry_list(&list);
-
 	fs_read_dir(disk, fsOprs, parent, &list);
 	current = list.first;
-
+	
+	// list 순회하며 검사
 	while (current)
 	{
 		if (strcmp((char*)current->entry.name, name) == 0)
@@ -399,7 +401,7 @@ int is_exist(DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, const SHELL_ENT
 		}
 		current = current->next;
 	}
-
+	
 	release_entry_list(&list);
 	return EXT2_SUCCESS;
 }
@@ -417,7 +419,6 @@ int fs_mkdir(DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, const SHELL_ENT
 		printf("error : %s already exist\n", name);
 		return EXT2_ERROR;
 	}
-		
 
 	shell_entry_to_ext2_entry(parent, &EXT2_Parent);
 
