@@ -155,11 +155,6 @@ int get_inode_location(EXT2_FILESYSTEM *fs, UINT32 inode_num, EXT2_ENTRY_LOCATIO
 int get_inode(EXT2_FILESYSTEM* fs, const UINT32 inode_num, INODE *inodeBuffer);
 int get_block_location(EXT2_FILESYSTEM *fs, UINT32 block_num, EXT2_ENTRY_LOCATION *loc);
 
-int meta_read(EXT2_FILESYSTEM *, SECTOR group,SECTOR block, BYTE* sector);
-int meta_write(EXT2_FILESYSTEM * fs, SECTOR group, SECTOR block, BYTE* sector);
-int data_read(EXT2_FILESYSTEM *, SECTOR group, SECTOR block, BYTE* sector);
-int data_write(EXT2_FILESYSTEM * fs, SECTOR group, SECTOR block, BYTE* sector);
-
 int ext2_format(DISK_OPERATIONS* disk, UINT32 block_size);
 int ext2_create(EXT2_NODE* parent, const char* entryName, EXT2_NODE* retEntry);
 int ext2_lookup(EXT2_NODE* parent, const char* entryName, EXT2_NODE* retEntry);
