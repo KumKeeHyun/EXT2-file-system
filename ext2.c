@@ -1585,7 +1585,8 @@ UINT32 scan_bitmap(BYTE *bitmap) {
 }
 
 // 못찾았을 때 -1 리턴, 찾으면 해당 block number 리턴
-UINT32 alloc_free_data_block_in_group(EXT2_FILESYSTEM *fs, UINT32 group) {
+UINT32 alloc_free_data_block_in_group(EXT2_FILESYSTEM *fs, UINT32 group) 
+{
 	BYTE bitmap[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
 	UINT32 num;
 
@@ -1595,8 +1596,65 @@ UINT32 alloc_free_data_block_in_group(EXT2_FILESYSTEM *fs, UINT32 group) {
 		printf("\ncan't fine free block bit in %u group\n", group);
 		return -1;
 	}
+
+	if ( set_sb_free_block_cnt(fs, 0, 1) != EXT2_SUCCESS ) return EXT2_ERROR;
+
 	write_disk_per_block(fs, group, fs->gd.start_block_of_block_bitmap, bitmap);
 	return group * fs->sb.block_per_group + num; // block num 은 0 부터 시작
+}
+
+// setting 0 : reset(++), 1 : set(--)
+int set_sb_free_block_cnt(EXT2_FILESYSTEM *fs, UINT32 group, BYTE setting)
+{
+	BYTE block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
+	EXT2_SUPER_BLOCK *sb;
+	EXT2_GROUP_DESCRIPTOR *gd;
+	UINT32 number_of_group = fs->disk->number_of_sectors / (fs->sb.sector_per_block * fs->sb.block_per_group);
+	UINT32 number_of_gdt_block = fs->gd.start_block_of_block_bitmap - 1; // group descriptor table이 차지하는 block 수
+	
+	/* super block 의 free_block_count 변경 */
+	read_disk_per_block(fs, 0, 0, block);
+	sb = (EXT2_SUPER_BLOCK *)block;
+	switch (setting){
+		case 0:
+			sb->free_block_count++;
+			break;
+		case 1:
+			sb->free_block_count--;
+			break;
+	}
+
+	// super block은 평소에는 0번 그룹만 setting 해준다.
+	write_disk_per_block(fs, 0, 0, block);
+
+	return EXT2_SUCCESS;
+}
+
+// setting 0 : reset(++), 1 : set(--)
+int set_sb_free_inode_cnt(EXT2_FILESYSTEM *fs, UINT32 group, BYTE setting)
+{
+	BYTE block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
+	EXT2_SUPER_BLOCK *sb;
+	EXT2_GROUP_DESCRIPTOR *gd;
+	UINT32 number_of_group = fs->disk->number_of_sectors / (fs->sb.sector_per_block * fs->sb.block_per_group);
+	UINT32 number_of_gdt_block = fs->gd.start_block_of_block_bitmap - 1; // group descriptor table이 차지하는 block 수
+	
+	/* super block 의 free_block_count 변경 */
+	read_disk_per_block(fs, 0, 0, block);
+	sb = (EXT2_SUPER_BLOCK *)block;
+	switch (setting){
+		case 0:
+			sb->free_inode_count++;
+			break;
+		case 1:
+			sb->free_inode_count--;
+			break;
+	}
+
+	// super block은 평소에는 0번 그룹만 setting 해준다.
+	write_disk_per_block(fs, 0, 0, block);
+
+	return EXT2_SUCCESS;
 }
 
 
@@ -1608,6 +1666,8 @@ void free_data_block(EXT2_FILESYSTEM *fs, UINT32 block_num) {
 	read_disk_per_block(fs, loc.group, fs->gd.start_block_of_block_bitmap, bitmap);
 	(((volatile unsigned int *)bitmap)[loc.block>>5]) &= (0xFFFFFFFF ^ (1UL << (loc.block & 31)));
 	write_disk_per_block(fs, loc.group, fs->gd.start_block_of_block_bitmap, bitmap);
+
+	set_sb_free_block_cnt(fs, 0, 0);
 }
 
 UINT32 alloc_free_inode_in_group(EXT2_FILESYSTEM *fs, UINT32 group) {
@@ -1620,6 +1680,9 @@ UINT32 alloc_free_inode_in_group(EXT2_FILESYSTEM *fs, UINT32 group) {
 		printf("\ncan't fine free block bit in %u group\n", group);
 		return -1;
 	}
+
+	if ( set_sb_free_inode_cnt(fs, 0, 1) != EXT2_SUCCESS ) return EXT2_ERROR;
+
 	write_disk_per_block(fs, group, fs->gd.start_block_of_inode_bitmap, bitmap);
 	return group * fs->sb.inode_per_group + num + 1; // inode 은 1 부터 시작
 }
@@ -1633,6 +1696,8 @@ void free_inode(EXT2_FILESYSTEM *fs, UINT32 inode_num) {
 	read_disk_per_block(fs, group, fs->gd.start_block_of_inode_bitmap, bitmap);
 	(((volatile unsigned int *)bitmap)[offset>>5]) &= (0xFFFFFFFF ^ (1UL << (offset & 31)));
 	write_disk_per_block(fs, group, fs->gd.start_block_of_inode_bitmap, bitmap);
+
+	set_sb_free_inode_cnt(fs, 0, 0);
 }
 
 /******************************************************************************/
@@ -1641,6 +1706,12 @@ void free_inode(EXT2_FILESYSTEM *fs, UINT32 inode_num) {
 
 int ext2_df(EXT2_FILESYSTEM* fs, unsigned int* total_sectors, unsigned int* used_sectors)
 {
+	BYTE block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
+	EXT2_SUPER_BLOCK *sb_ptr;
+	read_disk_per_block(fs, 0, 0, block);
+	sb_ptr = (EXT2_SUPER_BLOCK *)block;
+	fs->sb = *sb_ptr;
+
 	*total_sectors = fs->sb.block_count * SECTOR_PER_BLOCK;
 	*used_sectors = *total_sectors - (fs->sb.free_block_count * SECTOR_PER_BLOCK);
 	
