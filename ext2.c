@@ -565,21 +565,29 @@ int create_root(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK * sb, EXT2_GROUP_DESCRIP
 
 int insert_entry(UINT32 inode_num, EXT2_NODE * retEntry)
 {
+	INODE inode;
+	Indirect_Location i_loc;
 	EXT2_NODE new_entry;
+	UINT32 i = 0;
 
 	new_entry.fs = retEntry->fs;
 	new_entry.entry.name_len = retEntry->entry.name_len;
 
+	get_inode(retEntry->fs, inode_num, &inode);
+
 	// 새로운 entry가 들어가는 위치의 바로 앞에 있는 entry 위치정보를 new_entry->loc에 저장
-	if (lookup_entry(retEntry->fs, inode_num, NULL, &new_entry) == EXT2_SUCCESS) 
+	if (lookup_entry(retEntry->fs, inode_num, NULL, &new_entry) == EXT2_ERROR) 
 	{
-		retEntry->location = new_entry.location;
-		set_entry(retEntry->fs, &new_entry.location, &retEntry->entry);
+		get_indirect_location(retEntry->fs, i, &i_loc);
+		while (is_alloced_block(retEntry->fs, &inode, &i_loc) != EXT2_ERROR) {
+			get_indirect_location(retEntry->fs, ++i, &i_loc);
+		}
+		expand_block(retEntry->fs, inode_num, i, 0, EXT2_FT_DIR);
+		if (lookup_entry(retEntry->fs, inode_num, NULL, &new_entry) == EXT2_ERROR)
+			return EXT2_ERROR;
 	}
-	else // lookup_entry에서 빈자리 못찾았으면 오류
-	{
-		return EXT2_ERROR;
-	}
+	retEntry->location = new_entry.location;
+	set_entry(retEntry->fs, &new_entry.location, &retEntry->entry);
 
 	return EXT2_SUCCESS;
 }
@@ -634,7 +642,7 @@ int set_new_inode(EXT2_FILESYSTEM *fs, UINT32 prefer_group, UINT32 is_dir)
 		printf("alloc inode error\n");
 		return EXT2_ERROR;
 	}
-	printf("new inode : %u\n", new_inode);
+	//printf("new inode : %u\n", new_inode);
 
 	get_inode_location(fs, new_inode, &loc);
 	read_disk_per_block(fs, loc.group, loc.block, block);
@@ -930,98 +938,6 @@ int find_entry_at_block(const BYTE* block, const BYTE* formattedName, EXT2_DIR_E
 
 	return EXT2_ERROR;
 }
-
-/*
-int lookup_entry(EXT2_FILESYSTEM* fs, const int inode_num, const char* formattedName, EXT2_NODE* ret)
-{
-	// dir 만드는 경우..모든 그룹을 다 돌아야됨.
-	BYTE block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
-	int i_block_index;
-	INODE inode;
-	UINT32 byte_per_block = 1024 << LOG_BLOCK_SIZE;
-	int result;
-
-	get_inode(fs, inode_num, &inode);
-	// inode의 i_block을 돌아서 
-	for (i_block_index = 0; i_block_index < 15; i_block_index++)
-	{	
-		// inode.i_block[i_block_index] 번째 block, block 버퍼에 저장
-		UINT32 block_num = inode.i_block[i_block_index];
-		EXT2_ENTRY_LOCATION loc;
-		get_block_location(fs, block_num, &loc);
-		read_disk_per_block(fs, loc.group, loc.block, block);
-		
-		// && ~ : i_block에 block이 할당된 경우
-		if (i_block_index < 12 && inode.i_block[i_block_index])
-		{
-			result = get_entry_loc_at_block(block, formattedName, inode.i_block[i_block_index], ret);
-			if (result == EXT2_ERROR) continue;
-			else
-			{
-				//printf("'%s' file is already exist.\n", formattedName);
-				return result;
-			} 
-		}
-		else if (i_block_index >= 12 && inode.i_block[i_block_index])
-		{
-			int block_offset_1, block_offset_2, block_offset_3;
-			int max_block_offset = byte_per_block / sizeof(int *);
-			BYTE file_block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
-			BYTE file_block_2[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
-			BYTE file_block_3[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
-
-			switch(i_block_index)
-			{
-				case 12: // 단일 간접
-					for (block_offset_1 = 0; block_offset_1 < max_block_offset ; block_offset_1++)
-					{
-						*(int *)( block[block_offset_1] ) = file_block;
-
-						result = get_entry_loc_at_block(block, formattedName, inode.i_block[i_block_index], ret);
-						if (result = EXT2_ERROR) continue;
-						else return result;
-					}
-					break;
-				case 13: // 이중 간접
-					for (block_offset_2 = 0; block_offset_2 < max_block_offset ; block_offset_2++)
-					{
-						*(int *)( block[block_offset_2] ) = file_block_2;
-
-						for (block_offset_1 = 0; block_offset_1 < max_block_offset ; block_offset_1++)
-						{
-							*(int *)( block[block_offset_1] ) = file_block;
-
-							result = get_entry_loc_at_block(block, formattedName, inode.i_block[i_block_index], ret);
-							if (result = EXT2_ERROR) continue;
-							else return result;
-						}
-					}
-					break;
-				case 14: // 삼중 간접
-					for (block_offset_3 = 0; block_offset_3 < max_block_offset ; block_offset_3++)
-					{
-						*(int *)( block[block_offset_3] ) = file_block_3;
-						for (block_offset_2 = 0; block_offset_2 < max_block_offset ; block_offset_2++)
-						{
-							*(int *)( block[block_offset_2] ) = file_block_2;
-
-							for (block_offset_1 = 0; block_offset_1 < max_block_offset ; block_offset_1++)
-							{
-								*(int *)( block[block_offset_1] ) = file_block;
-						
-								result = get_entry_loc_at_block(block, formattedName, inode.i_block[i_block_index], ret);
-								if (result = EXT2_ERROR) continue;
-								else return result;
-							}
-						}
-					}
-					break;
-			} // switch문 종료	
-		}
-	}
-	return EXT2_ERROR;
-}
-*/
 
 // indirect function
 int lookup_entry(EXT2_FILESYSTEM* fs, const int inode_num, const char* formattedName, EXT2_NODE* ret)
