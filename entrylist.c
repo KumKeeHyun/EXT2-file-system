@@ -5,12 +5,14 @@
 #define NULL	( ( void* )0 )
 #endif
 
+// shell entry list 0으로 초기화
 int init_entry_list(SHELL_ENTRY_LIST* list)
 {
 	memset(list, 0, sizeof(SHELL_ENTRY_LIST));
 	return 0;
 }
 
+// entry를 list에 추가
 int add_entry_list(SHELL_ENTRY_LIST* list, SHELL_ENTRY* entry)
 {
 	SHELL_ENTRY_LIST_ITEM*	newItem;
@@ -32,6 +34,7 @@ int add_entry_list(SHELL_ENTRY_LIST* list, SHELL_ENTRY* entry)
 	return 0;
 }
 
+// shell entry list 해제
 void release_entry_list(SHELL_ENTRY_LIST* list)
 {
 	SHELL_ENTRY_LIST_ITEM*	currentItem;
