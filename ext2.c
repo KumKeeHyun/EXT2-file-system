@@ -12,57 +12,6 @@ typedef struct
 
 #define GET_RECORD_LEN(entry) 		((entry)->name_len + 8)
 
-
-
-// 임시 expand
-UINT32 expand_block_scope(EXT2_FILESYSTEM * fs, UINT32 inode_num, DWORD start, DWORD end, UINT32 prefer_group, UINT32 is_dir)
-{
-	INODE *inode_buf;
-	EXT2_ENTRY_LOCATION loc;
-	UINT32 i_blk_idx, new_block;
-	BYTE block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
-
-	get_inode_location(fs, inode_num, &loc);
-	read_disk_per_block(fs, loc.group, loc.block, block);
-	inode_buf = ((INODE *)block) + loc.offset;
-
-	if (start > end || start < 0 || 15 <= end) return EXT2_ERROR;
-
-	// 간접 i_block 추가구현 해야함 일단 고려 안하고 짬
-	for (i_blk_idx = start; i_blk_idx <= end; i_blk_idx++) {
-		if (inode_buf->i_block[i_blk_idx] == 0)
-			break;
-	}
-	if (i_blk_idx == 15) {
-		printf("i_blocks full\n");
-		return EXT2_ERROR;
-	}
-
-	// group 임시로 0으로 해놓음 수정해야함
-	new_block = alloc_free_data_block_in_group(fs, 0);
-	if (new_block == -1) {
-		printf("alloc block error\n");
-		return EXT2_ERROR;
-	}
-	
-	inode_buf->block_cnt++;
-
-	inode_buf->i_block[i_blk_idx] = new_block;
-	write_disk_per_block(fs, loc.group, loc.block, block);
-
-	ZeroMemory(block, sizeof(block));
-
-	if (is_dir == EXT2_FT_DIR) 
-	{
-		((EXT2_DIR_ENTRY *)block)->record_len = (MAX_SECTOR_SIZE * SECTOR_PER_BLOCK);
-	}
-
-	get_block_location(fs, new_block, &loc);
-	write_disk_per_block(fs, loc.group, loc.block, block);
-
-	return EXT2_SUCCESS;
-}
-
 #define FILL_ENTRY(entry, _inode, _name, _type) \
 (entry)->inode = _inode; \
 (entry)->file_type = _type; \
@@ -94,15 +43,11 @@ int ext2_write(EXT2_NODE* file, unsigned long offset, unsigned long length, cons
 	{ 
 		// 나중에 0 수정할 것.
 
-		/*if (expand_block(file->fs, entry->inode, 0, EXT2_FT_UNKNOWN) == EXT2_ERROR)
+		if (expand_block(file->fs, entry->inode, i, 0, EXT2_FT_REG_FILE) == EXT2_ERROR)
 		{
-			printf("Can't expand block.\n");
-			return EXT2_ERROR;
-		}*/
-
-		// 임시
-		expand_block_scope(file->fs, entry->inode, start_block_number, block_number, 0, EXT2_FT_REG_FILE); 
-		//get_inode(file->fs, entry->inode, &inode_ptr); // 이거 나중에 이 줄 없애게 수정?
+			printf("Can't expand block. %d, goal : %d\n", i, block_number);
+			//return EXT2_ERROR;
+		}
 	}
 
 	while (current_offset < read_end)
@@ -114,14 +59,17 @@ int ext2_write(EXT2_NODE* file, unsigned long offset, unsigned long length, cons
 
 		copy_length =  MIN(byte_per_block - block_offset, read_end - current_offset);
 
-		// 어쨋든 block 읽어와서 copy_length만큼 쓴 다음 그거 write
-		if (read_data_by_logical_block_num(file->fs, entry->inode, current_block, block) == EXT2_ERROR)
-		{
-			printf("read_data_by_logical_block_num() function error.\n");
-			return EXT2_ERROR;
+		// block 읽어와서 copy_length만큼 쓴 다음 그거 write
+		if (copy_length != byte_per_block) {
+			if (read_data_indirect(file->fs, entry->inode, current_block, block) == EXT2_ERROR)
+			{
+				printf("read_data_by_logical_block_num() function error.\n");
+				return EXT2_ERROR;
+			}
 		}
+		
 		memcpy(&block[block_offset], buffer, copy_length);
-		if( write_data_by_logical_block_num(file->fs, entry->inode, current_block, block) == EXT2_ERROR)
+		if( write_data_indirect(file->fs, entry->inode, current_block, block) == EXT2_ERROR)
 		{
 			printf("write_data_by_logical_block_num() function error.\n");
 			return EXT2_ERROR;
@@ -135,9 +83,10 @@ int ext2_write(EXT2_NODE* file, unsigned long offset, unsigned long length, cons
 
 		buffer += copy_length;
 		current_offset += copy_length;
+		write_disk_per_block(file->fs, loc.group, loc.block, block);
 	}
 
-	write_disk_per_block(file->fs, loc.group, loc.block, block);
+	
 
 	return current_offset - offset;
 }
@@ -170,7 +119,7 @@ int ext2_read(EXT2_NODE* file, unsigned long offset, unsigned long length, const
 		block_offset = current_offset % byte_per_block;
 	
 		// block_number 에 따라서 data block 가져오기 
-		if (read_data_by_logical_block_num(file->fs, entry->inode, block_number , block) == EXT2_ERROR)
+		if (read_data_indirect(file->fs, entry->inode, block_number , block) == EXT2_ERROR)
 		{
 			printf("read_data_by_logical_block_num() function error.\n");
 			return EXT2_ERROR;
@@ -187,209 +136,77 @@ int ext2_read(EXT2_NODE* file, unsigned long offset, unsigned long length, const
 	return current_offset - offset;
 }
 
-// file이 차지하는 블록의 논리적 순서에 위치한 블록의 i_block_index구함
-int get_i_block_index_by_logical_block_num(int block_number)
+// 논리적인 블럭 번호를 통해 블럭을 검색, 읽음
+int read_data_indirect(EXT2_FILESYSTEM* fs, const int inode_num, UINT32 logic_blk , BYTE* block_buf)
 {
-	UINT32 i_block_index;
-
-	if (0<=block_number && block_number < 12) 
-		i_block_index = block_number;
-	else if (12 <= block_number && block_number < 12 + 256) 
-		i_block_index = 12;  
-	else if (12 + 256 <= block_number && block_number < 12 + 256 + 256*256)
-		i_block_index = 13;
-	else if (12 + 256 + 256*256 <= block_number && block_number < 12 + 256 + 256*256 + 256*256*256) 
-		i_block_index = 14;
-	
-	return i_block_index;
-}
-
-int read_data_by_logical_block_num(EXT2_FILESYSTEM* fs, const int inode_num, UINT32 logical_block_num , BYTE* block_buf)
-{
-	BYTE block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
 	INODE inode;
-	UINT32 byte_per_block = 1024 << LOG_BLOCK_SIZE;
-	UINT32 i_block_index = logical_block_num;
+	Indirect_Location i_loc;
+	RW_Argv argv;
+	int result;
+
+	argv.block = block_buf;
 
 	get_inode(fs, inode_num, &inode);
 
-	i_block_index = get_i_block_index_by_logical_block_num(logical_block_num);
-
-	if (i_block_index < 0 || 15 <= i_block_index)
-	{
+	if (get_indirect_location(fs, logic_blk, &i_loc) == EXT2_ERROR) {
+		printf("wrong block num\n");
 		return EXT2_ERROR;
 	}
 
-	// inode.i_block[i_block_index] 번째 block, block 버퍼에 저장
-	UINT32 block_num = inode.i_block[i_block_index];
-	EXT2_ENTRY_LOCATION loc;
-	get_block_location(fs, block_num, &loc);
-	
-	if (!inode.i_block[i_block_index])
+	switch (i_loc.i_blk)
 	{
-		printf("그런 블록 또 없습니다~\n"); // 나중에 삭제
-		return EXT2_ERROR;
-	}
-
-	if (i_block_index < 12)
-	{
-		read_disk_per_block(fs, loc.group, loc.block, block_buf);
-
-		return EXT2_SUCCESS;
-	}
-	else if (i_block_index >= 12) // 뒤에 아직 구현 대충
-	{
-		int block_offset_1, block_offset_2, block_offset_3;
-		int file_block, file_block_2, file_block_3;
-		int max_block_offset = byte_per_block / sizeof(int *); // 256
-		
-		read_disk_per_block(fs, loc.group, loc.block, block);
-
-		switch(i_block_index)
-		{
-			case 12: // 단일 간접
-				block_offset_1 = logical_block_num - 12;
-			
-				*((int *)block + block_offset_1) = file_block;
-
-				get_block_location(fs, file_block, &loc);
-				read_disk_per_block(fs, loc.group, loc.block, block_buf);
-				
-				return EXT2_SUCCESS;
-			case 13: // 이중 간접
-				block_offset_2 = (logical_block_num - max_block_offset - 12) / max_block_offset;
-				block_offset_1 = (logical_block_num - max_block_offset - 12) % max_block_offset;
-
-				*((int *)block + block_offset_2) = file_block_2;
-
-				get_block_location(fs, file_block_2, &loc);
-				read_disk_per_block(fs, loc.group, loc.block, block);
-
-				*((int *)block + block_offset_1) = file_block;
-				
-				get_block_location(fs, file_block, &loc);
-				read_disk_per_block(fs, loc.group, loc.block, block_buf);
-				
-				return EXT2_SUCCESS;
-			case 14: // 삼중 간접
-				block_offset_3 = (logical_block_num - max_block_offset*max_block_offset - max_block_offset - 12) / (max_block_offset*max_block_offset);
-				block_offset_2 = (logical_block_num - max_block_offset*max_block_offset - max_block_offset - 12) / max_block_offset;
-				block_offset_1 = (logical_block_num - max_block_offset - 12) % max_block_offset;
-				
-				*((int *)block + block_offset_3 ) = file_block_3;
-				
-				get_block_location(fs, file_block_3, &loc);
-				read_disk_per_block(fs, loc.group, loc.block, block);
-
-				*((int *)block + block_offset_2 ) = file_block_2;
-
-				get_block_location(fs, file_block_2, &loc);
-				read_disk_per_block(fs, loc.group, loc.block, block);
-
-				*((int *)block + block_offset_1 ) = file_block;
-
-				get_block_location(fs, file_block, &loc);
-				read_disk_per_block(fs, loc.group, loc.block, block_buf);
-				
-				return EXT2_SUCCESS;
-		} // switch문 종료	
+	case 12:
+		result = rw_indirect_func(fs, 1, inode.i_block[i_loc.i_blk], &i_loc, rw_indirect_read, &argv);
+		break;
+	case 13:
+		result = rw_indirect_func(fs, 2, inode.i_block[i_loc.i_blk], &i_loc, rw_indirect_read, &argv);
+		break;
+	case 14:
+		result = rw_indirect_func(fs, 3, inode.i_block[i_loc.i_blk], &i_loc, rw_indirect_read, &argv);
+		break;
+	default:
+		result = rw_indirect_func(fs, 0, inode.i_block[i_loc.i_blk], &i_loc, rw_indirect_read, &argv);
+		break;
 	}
 	
-	return EXT2_ERROR;
+	return result;
 }
 
-int write_data_by_logical_block_num(EXT2_FILESYSTEM* fs, const int inode_num, UINT32 logical_block_num , BYTE* block_buf)
+// 논리적인 블럭 번호를 통해 블럭을 검색, 씀
+int write_data_indirect(EXT2_FILESYSTEM* fs, const int inode_num, UINT32 logic_blk , BYTE* block_buf)
 {
-	BYTE block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
 	INODE inode;
-	UINT32 byte_per_block = 1024 << LOG_BLOCK_SIZE;
-	UINT32 i_block_index = logical_block_num;
+	Indirect_Location i_loc;
+	RW_Argv argv;
+	int result;
+
+	argv.block = block_buf;
 
 	get_inode(fs, inode_num, &inode);
 
-	i_block_index = get_i_block_index_by_logical_block_num(logical_block_num);
-
-	// inode.i_block[i_block_index] 번째 block, block 버퍼에 저장
-	UINT32 block_num = inode.i_block[i_block_index];
-	EXT2_ENTRY_LOCATION loc;
-	get_block_location(fs, block_num, &loc);
-
-	if (!inode.i_block[i_block_index])
-	{
-		printf("그런 블록 또 없습니다~\n"); //나중에 삭제
+	if (get_indirect_location(fs, logic_blk, &i_loc) == EXT2_ERROR) {
+		printf("wrong block num\n");
 		return EXT2_ERROR;
 	}
-	if (i_block_index < 12)
+
+	switch (i_loc.i_blk)
 	{
-		write_disk_per_block(fs, loc.group, loc.block, block_buf);
-		
-		return EXT2_SUCCESS;
+	case 12:
+		result = rw_indirect_func(fs, 1, inode.i_block[i_loc.i_blk], &i_loc, rw_indirect_write, &argv);
+		break;
+	case 13:
+		result = rw_indirect_func(fs, 2, inode.i_block[i_loc.i_blk], &i_loc, rw_indirect_write, &argv);
+		break;
+	case 14:
+		result = rw_indirect_func(fs, 3, inode.i_block[i_loc.i_blk], &i_loc, rw_indirect_write, &argv);
+		break;
+	default:
+		result = rw_indirect_func(fs, 0, inode.i_block[i_loc.i_blk], &i_loc, rw_indirect_write, &argv);
+		break;
 	}
-	else if (i_block_index >= 12) // 뒤에 구현  대충 함
-	{
-		int block_offset_1, block_offset_2, block_offset_3;
-		int max_block_offset = byte_per_block / sizeof(int *);
-		BYTE file_block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
-		BYTE file_block_2[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
-		BYTE file_block_3[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
-
-		read_disk_per_block(fs, loc.group, loc.block, block);
-
-		switch(i_block_index)
-		{
-			case 12: // 단일 간접
-				block_offset_1 = logical_block_num - 12;
-			
-				*((int *)block + block_offset_1) = file_block;
-				
-				get_block_location(fs, file_block, &loc);
-				write_disk_per_block(fs, loc.group, loc.block, block);
-				
-				return EXT2_SUCCESS;
-			case 13: // 이중 간접
-				block_offset_2 = (logical_block_num - max_block_offset - 12) / max_block_offset;
-				block_offset_1 = (logical_block_num - max_block_offset - 12) % max_block_offset;
-
-				*((int *)block + block_offset_2) = file_block_2;
-
-				get_block_location(fs, file_block_2, &loc);
-				read_disk_per_block(fs, loc.group, loc.block, block);
-
-				*((int *)block + block_offset_1) = file_block;
-				
-				get_block_location(fs, file_block, &loc);
-				write_disk_per_block(fs, loc.group, loc.block, block_buf);
-				
-				return EXT2_SUCCESS;
-			case 14: // 삼중 간접
-				block_offset_3 = (logical_block_num - max_block_offset*max_block_offset - max_block_offset - 12) / (max_block_offset*max_block_offset);
-				block_offset_2 = (logical_block_num - max_block_offset*max_block_offset - max_block_offset - 12) / max_block_offset;
-				block_offset_1 = (logical_block_num - max_block_offset - 12) % max_block_offset;
-				
-				*((int *)block + block_offset_3 ) = file_block_3;
-				
-				get_block_location(fs, file_block_3, &loc);
-				read_disk_per_block(fs, loc.group, loc.block, block);
-
-				*((int *)block + block_offset_2 ) = file_block_2;
-
-				get_block_location(fs, file_block_2, &loc);
-				read_disk_per_block(fs, loc.group, loc.block, block);
-
-				*((int *)block + block_offset_1 ) = file_block;
-
-				get_block_location(fs, file_block, &loc);
-				write_disk_per_block(fs, loc.group, loc.block, block_buf);
-				
-				return EXT2_SUCCESS;
-		} // switch문 종료	
-	}
-	return EXT2_ERROR;
+	
+	return result;
 }
-
-
-
-UINT32 get_free_inode_number(EXT2_FILESYSTEM* fs);
 
 int write_block(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK* sb, BYTE* block, unsigned int start_block)
 {
@@ -838,9 +655,10 @@ int set_new_inode(EXT2_FILESYSTEM *fs, UINT32 prefer_group, UINT32 is_dir)
 	return new_inode;
 }
 
-UINT32 expand_block(EXT2_FILESYSTEM * fs, UINT32 inode_num, UINT32 blk_idx, UINT32 prefer_group, UINT32 is_dir)
+UINT32 expand_block(EXT2_FILESYSTEM * fs, UINT32 inode_num, UINT64 blk_idx, UINT32 prefer_group, UINT32 is_dir)
 {
 	INODE *inode_buf;
+	Indirect_Location i_loc;
 	EXT2_ENTRY_LOCATION loc;
 	UINT32 new_block;
 	BYTE block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
@@ -849,20 +667,27 @@ UINT32 expand_block(EXT2_FILESYSTEM * fs, UINT32 inode_num, UINT32 blk_idx, UINT
 	read_disk_per_block(fs, loc.group, loc.block, block);
 	inode_buf = ((INODE *)block) + loc.offset;
 
-	if (inode_buf->i_block[blk_idx]) {
+	if (get_indirect_location(fs, blk_idx, &i_loc) == EXT2_ERROR) {
+		printf("wrong block num\n");
+		return EXT2_ERROR;
+	}
+	if (is_alloced_block(fs, inode_buf, &i_loc) == EXT2_SUCCESS) {
 		printf("i_block[blk_idx] is full\n");
 		return EXT2_ERROR;
 	}
+	else {
+		printf("free i_block!\n");
+	}
 
-	// group 임시로 0으로 해놓음 수정해야함
-	new_block = alloc_free_data_block_in_group(fs, 0);
+	new_block = alloc_free_data_block_prefer(fs, prefer_group);
 	if (new_block == -1) {
 		printf("alloc block error\n");
 		return EXT2_ERROR;
 	}
 
+	set_new_block(fs, inode_buf, &i_loc, new_block);
 	inode_buf->block_cnt++;
-	inode_buf->i_block[blk_idx] = new_block;
+	//inode_buf->i_block[blk_idx] = new_block;
 	write_disk_per_block(fs, loc.group, loc.block, block);
 
 	ZeroMemory(block, sizeof(block));
@@ -874,6 +699,55 @@ UINT32 expand_block(EXT2_FILESYSTEM * fs, UINT32 inode_num, UINT32 blk_idx, UINT
 	write_disk_per_block(fs, loc.group, loc.block, block);
 
 	return EXT2_SUCCESS;
+}
+
+int is_alloced_block(EXT2_FILESYSTEM *fs, INODE *inode, Indirect_Location *i_loc)
+{
+	RW_Argv argv;
+	int result;
+
+	argv.block = NULL;
+
+	switch (i_loc->i_blk)
+	{
+	case 12:
+		result = rw_indirect_func(fs, 1, inode->i_block[i_loc->i_blk], i_loc, rw_indirect_check_alloced, &argv);
+		break;
+	case 13:
+		result = rw_indirect_func(fs, 2, inode->i_block[i_loc->i_blk], i_loc, rw_indirect_check_alloced, &argv);
+		break;
+	case 14:
+		result = rw_indirect_func(fs, 3, inode->i_block[i_loc->i_blk], i_loc, rw_indirect_check_alloced, &argv);
+		break;
+	default:
+		result = rw_indirect_func(fs, 0, inode->i_block[i_loc->i_blk], i_loc, rw_indirect_check_alloced, &argv);
+		break;
+	}
+
+	return result;
+}
+
+int set_new_block(EXT2_FILESYSTEM *fs, INODE *inode, Indirect_Location *i_loc, UINT32 new_block)
+{
+	int result;
+
+	switch (i_loc->i_blk)
+	{
+	case 12:
+		result = expand_indiret(fs, 1, inode->i_block + i_loc->i_blk, i_loc, new_block);
+		break;
+	case 13:
+		result = expand_indiret(fs, 2, inode->i_block + i_loc->i_blk, i_loc, new_block);
+		break;
+	case 14:
+		result = expand_indiret(fs, 3, inode->i_block + i_loc->i_blk, i_loc, new_block);
+		break;
+	default:
+		result = expand_indiret(fs, 0, inode->i_block + i_loc->i_blk, i_loc, new_block);
+		break;
+	}
+
+	return result;
 }
 
 // ------------------------------------------------------
@@ -926,6 +800,9 @@ int get_inode_location(EXT2_FILESYSTEM *fs, UINT32 inode_num, EXT2_ENTRY_LOCATIO
 }
 
 int get_inode(EXT2_FILESYSTEM* fs, const UINT32 inode_num, INODE *inodeBuffer) {
+	
+	//printf("call get inode : %u\n", inode_num);
+	
 	if (inode_num < 1)
 		return EXT2_ERROR;
 
@@ -1629,6 +1506,23 @@ void free_inode(EXT2_FILESYSTEM *fs, UINT32 inode_num) {
 	read_disk_per_block(fs, group, fs->gd.start_block_of_inode_bitmap, bitmap);
 	(((volatile unsigned int *)bitmap)[offset>>5]) &= (0xFFFFFFFF ^ (1UL << (offset & 31)));
 	write_disk_per_block(fs, group, fs->gd.start_block_of_inode_bitmap, bitmap);
+}
+
+UINT32 alloc_free_data_block_prefer(EXT2_FILESYSTEM *fs, UINT32 prefer)
+{
+	UINT32 num_of_grp = fs->disk->number_of_sectors / (fs->sb.sector_per_block * fs->sb.block_per_group);
+	UINT32 result;
+
+	if (0 <= prefer && prefer < num_of_grp) {
+		if ((result = alloc_free_data_block_in_group(fs, prefer)) != -1)
+			return result;
+	}
+
+	for (UINT32 grp = 0; grp < num_of_grp; grp++) {
+		if ((result = alloc_free_data_block_in_group(fs, grp)) != -1)
+			return result;
+	}
+	return -1;
 }
 
 /******************************************************************************/
