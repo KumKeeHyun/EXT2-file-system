@@ -180,8 +180,11 @@ UINT32 alloc_free_inode_in_group(EXT2_FILESYSTEM *fs, UINT32 group);
 void free_inode(EXT2_FILESYSTEM *fs, UINT32 inode_num);
 int free_inode_and_blocks(EXT2_FILESYSTEM *fs, UINT32 inode_num);
 
+UINT32 alloc_free_data_block_prefer(EXT2_FILESYSTEM *fs, UINT32 prefer);
+
+
 int set_new_inode(EXT2_FILESYSTEM *fs, UINT32 prefer_group, UINT32 is_dir);
-UINT32 expand_block(EXT2_FILESYSTEM * fs, UINT32 inode_num, UINT32 blk_idx, UINT32 prefer_group, UINT32 is_dir);
+UINT32 expand_block(EXT2_FILESYSTEM * fs, UINT32 inode_num, UINT64 blk_idx, UINT32 prefer_group, UINT32 is_dir);
 int fill_super_block(EXT2_SUPER_BLOCK * sb, SECTOR numberOfSectors, UINT32 bytesPerSector);
 int fill_descriptor_block(EXT2_GROUP_DESCRIPTOR * gd, EXT2_SUPER_BLOCK * sb, SECTOR numberOfSectors, UINT32 bytesPerSector);
 int create_root(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK * sb, EXT2_GROUP_DESCRIPTOR *gd);

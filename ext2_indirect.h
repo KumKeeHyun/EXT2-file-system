@@ -21,7 +21,40 @@ typedef struct {
 // indirect block을 순회하는 함수
 int indirect_func(EXT2_FILESYSTEM *fs, int level, UINT32 blk, generic *f_ptr, void *argv);
 
+/*---------------------------------------------------- */
 
+typedef struct {
+    int i_blk;
+    int indir_idx[4];
+} Indirect_Location;
+
+typedef struct {
+    Argv argv;
+    BYTE *block;
+} RW_Argv;
+
+typedef struct {
+    Argv argv;
+    BYTE *block;
+    int is_expand;
+
+    UINT32 new_block;
+} RW_Argv_Expand;
+
+int get_indirect_location(EXT2_FILESYSTEM *fs, UINT64 blk_num, Indirect_Location *i_loc);
+
+int rw_indirect_func(EXT2_FILESYSTEM *fs, int level, UINT32 blk, Indirect_Location *i_loc, generic *f_ptr, void *argv);
+
+int rw_indirect_read(void *_argv);
+
+int rw_indirect_write(void *_argv);
+
+int rw_indirect_check_alloced(void *_argv);
+
+
+/*---------------------------------------------------- */
+
+int expand_indiret(EXT2_FILESYSTEM *fs, int level, UINT32 *blk, Indirect_Location *i_loc, UINT32 new_block);
 
 /*---------------------------------------------------- */
 
