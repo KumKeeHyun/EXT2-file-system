@@ -753,7 +753,7 @@ int insert_entry(INODE* inode, EXT2_NODE * retEntry)
 	new_entry.fs = retEntry->fs;
 	new_entry.entry.name_len = retEntry->entry.name_len;
 
-	// 새로운 entry가 들어가는 위치의 바로 앞에 있는 entry 위치정보를 new_entry->loc에 저장
+	// 새로운 entry가 들어갈 위치의 바로 앞에 있는 entry 위치정보를 new_entry->loc에 저장
 	if (lookup_entry(retEntry->fs, inode, NULL, &new_entry) == EXT2_SUCCESS) 
 	{
 		retEntry->location = new_entry.location;
@@ -761,6 +761,11 @@ int insert_entry(INODE* inode, EXT2_NODE * retEntry)
 	}
 	else // lookup_entry에서 빈자리 못찾았으면 오류
 	{
+		// 블록할당해보고 할당할 블록도 없으면 에러.
+		// 아몰랑
+		// expand_block(retEntry->fs, retEntry->entry.inode, blknum, retEntry->location.group, 0);
+		// 그룹 이렇게 하는 게 맞을랑가
+
 		return EXT2_ERROR;
 	}
 
@@ -1018,11 +1023,9 @@ int find_entry_at_block(const BYTE* block, const BYTE* formattedName, EXT2_DIR_E
 	UINT32 loc_offset, cmp_length;
 	block_offset = block;
 	loc_offset = 0;
-	//parent->fs->sb.log_block_size 형태로 가져올 수 있도록 수정해야 함
-	block_end = block_offset + 1024;
+	block_end = block_offset + (1024 << LOG_BLOCK_SIZE);
 
 	while (block_offset != block_end)
-
 	{
 		entry = (EXT2_DIR_ENTRY *)block_offset;
 		real_record_len = GET_RECORD_LEN(entry);
@@ -1051,6 +1054,7 @@ int find_entry_at_block(const BYTE* block, const BYTE* formattedName, EXT2_DIR_E
 		block_offset += entry->record_len;
 		loc_offset += entry->record_len;
 	}
+	*offset = loc_offset;
 
 	return EXT2_ERROR;
 }
@@ -1231,7 +1235,7 @@ int ext2_create(EXT2_NODE* parent, const char* entryName, EXT2_NODE* retEntry)
 		return EXT2_ERROR;
 	}
 	
-	/* ret entry의 dir entry에 name_len, file_type, record_len 등록 */
+	/* ret entry의 dir entry에 name_len, file_type 등록 */
 	FILL_ENTRY(&(retEntry->entry), new_inode_num, entryName, EXT2_FT_REG_FILE);
 	
 	/* parent 에 retEntry 삽입 */
