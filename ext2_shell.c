@@ -134,10 +134,9 @@ typedef struct {
 
 int fs_format(DISK_OPERATIONS* disk, void* param)
 {
-	UINT32 block_size;
 	printf("formatting as a %s\n", (char *)param);
 
-	return ext2_format(disk, block_size);
+	return ext2_format(disk);
 }
 
 static SHELL_FILE_OPERATIONS g_file =
@@ -189,7 +188,7 @@ int fs_mount(DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, SHELL_ENTRY* ro
 		printf("\n----------------------------------------------\n");
 	}
 
-	printf("%s", ext2_entry.entry.name);
+	printf("%s ", ext2_entry.entry.name);
 	ext2_entry_to_shell_entry(fs, &ext2_entry, root);
 
 	EXT2_NODE *debug = (EXT2_NODE *)root->pdata;
@@ -295,16 +294,10 @@ int ext2_entry_to_shell_entry(EXT2_FILESYSTEM* fs, const EXT2_NODE* ext2_entry, 
 	EXT2_NODE* entry = (EXT2_NODE*)shell_entry->pdata;
 	INODE inodeBuffer;
 	BYTE* str = "/";
-
-	// if (format_name(fs, ext2_entry->entry.name) == EXT2_ERROR){
-	// 	printf("naming format wrong\n");
-	// 	return EXT2_ERROR;
-	// }
-
-	ZeroMemory(shell_entry, sizeof(SHELL_ENTRY));
-
 	int inode = ext2_entry->entry.inode;
-	int result = get_inode(fs, inode, &inodeBuffer);
+	
+	ZeroMemory(shell_entry, sizeof(SHELL_ENTRY));
+	get_inode(fs, inode, &inodeBuffer);
 
 	memcpy(shell_entry->name, ext2_entry->entry.name, ext2_entry->entry.name_len);
 	shell_entry->name[ext2_entry->entry.name_len] = '\0';
@@ -313,8 +306,6 @@ int ext2_entry_to_shell_entry(EXT2_FILESYSTEM* fs, const EXT2_NODE* ext2_entry, 
 		shell_entry->isDirectory = 1;
 	else
 		shell_entry->isDirectory = 0;
-
-	// shell_entry->permition = 0x01FF & inodeBuffer.mode; 수정해야함
 
 	shell_entry->size = inodeBuffer.size;
 

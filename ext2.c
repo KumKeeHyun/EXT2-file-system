@@ -208,11 +208,11 @@ int write_data_indirect(EXT2_FILESYSTEM* fs, const int inode_num, UINT32 logic_b
 	return result;
 }
 
-int write_block(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK* sb, BYTE* block, unsigned int start_block)
+int write_block(DISK_OPERATIONS* disk, BYTE* block, unsigned int start_block)
 {
-	SECTOR sector_index = start_block * sb->sector_per_block + BOOT_SECTOR_BASE;
+	SECTOR sector_index = start_block * SECTOR_PER_BLOCK + BOOT_SECTOR_BASE;
 
-    for (int i = 0; i < sb->sector_per_block; i++)
+    for (int i = 0; i < SECTOR_PER_BLOCK; i++)
 	{
         if (disk->write_sector(disk, sector_index + i, &(block[i * disk->bytes_per_sector])) == EXT2_ERROR) {
 			PRINTF("write_block() function error\n");
@@ -222,11 +222,11 @@ int write_block(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK* sb, BYTE* block, unsign
 	return EXT2_SUCCESS;
 }
 
-int read_block(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK* sb, BYTE* block, unsigned int start_block) 
+int read_block(DISK_OPERATIONS* disk, BYTE* block, unsigned int start_block) 
 {
-	SECTOR sector_index = start_block * sb->sector_per_block + BOOT_SECTOR_BASE;
+	SECTOR sector_index = start_block * SECTOR_PER_BLOCK + BOOT_SECTOR_BASE;
 
-	for (int i = 0; i < sb->sector_per_block; i++)
+	for (int i = 0; i < SECTOR_PER_BLOCK; i++)
 	{
 		if(disk->read_sector(disk, sector_index + i, &(block[i * disk->bytes_per_sector]))== EXT2_ERROR) {
 			PRINTF("read_block() function error\n");
@@ -236,29 +236,26 @@ int read_block(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK* sb, BYTE* block, unsigne
 	return EXT2_SUCCESS;
 }
 
-// 나중에 수정 : log_block_size는 define해줬으니까 삭제 해야함.
-int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
+int ext2_format(DISK_OPERATIONS* disk)
 {
 	EXT2_SUPER_BLOCK sb;
 	EXT2_GROUP_DESCRIPTOR gd;
 	EXT2_GROUP_DESCRIPTOR  gd_another_group;
-	
+	BYTE block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
+	UINT32 byte_per_block = 1024 << LOG_BLOCK_SIZE;
+    UINT32 number_of_group;
+	UINT32 descriptor_per_block = (1024 << LOG_BLOCK_SIZE) / 32;
+	int descriptor_block_index = 0;
 	int i, gi, j;
 
 	/* super block 채우기 */
 	if (fill_super_block(&sb, disk->number_of_sectors, disk->bytes_per_sector) != EXT2_SUCCESS)
 		return EXT2_ERROR;
 	
-	UINT32 byte_per_block = 1024 << log_block_size;
-    UINT32 number_of_group = disk->number_of_sectors / (sb.sector_per_block * sb.block_per_group);
-
-	//BYTE block[MAX_SECTOR_SIZE * sector_per_block];
-	BYTE block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
-
 	ZeroMemory(block, sizeof(block));
 	memcpy(block, &sb, sizeof(sb));
 
-	if (write_block(disk, &sb, block, 0) == EXT2_ERROR)
+	if (write_block(disk, block, 0) == EXT2_ERROR)
 		return EXT2_ERROR; 
 	
 	/* 0번 descriptor 채우기 */
@@ -269,9 +266,7 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 
 	// 0번 block group과 달리, 1번~ block groups는 inode 예약 영역이 없고, 
 	// root block이 없어서 free count 다시 초기화
-	UINT32 descriptor_per_block = (1024 << sb.log_block_size) / 32;
-	int descriptor_block_index = 0;
-
+	number_of_group = disk->number_of_sectors / (sb.sector_per_block * sb.block_per_group);
 	gd_another_group = gd;
 	gd_another_group.free_inodes_count = sb.inode_per_group;
 	gd_another_group.free_blocks_count = sb.free_block_count / number_of_group;
@@ -286,26 +281,25 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 		// 한 block 꽉 차면 다음 block으로 넘어감
 		if ((j + 1) % descriptor_per_block == 0) 
 		{
-			if (write_block(disk, &sb, block, 1 + descriptor_block_index++) == EXT2_ERROR)
+			if (write_block(disk, block, 1 + descriptor_block_index++) == EXT2_ERROR)
 				return EXT2_ERROR; 
 			ZeroMemory(block, sizeof(block));
 		}
 	} 
-	
 	// 꽉 채우지 못한 마지막 block 써줌
 	if (number_of_group % descriptor_per_block != 0)
 	{
-		if (write_block(disk, &sb, block, 1 + descriptor_block_index) == EXT2_ERROR)
+		if (write_block(disk, block, 1 + descriptor_block_index) == EXT2_ERROR)
 				return EXT2_ERROR;
 	}
 
 	/* block bitmap 채우기 */
-	ZeroMemory((block), sizeof(block));
+	ZeroMemory(block, sizeof(block));
 
 	for (unsigned int i = 0; i < sb.first_meta_bg + 1; i++) {
 		(((volatile unsigned int *) block)[i >> 5]) |= (1UL << (i & 31));
 	}
-	if (write_block(disk, &sb, block, gd.start_block_of_block_bitmap) == EXT2_ERROR)
+	if (write_block(disk,block, gd.start_block_of_block_bitmap) == EXT2_ERROR)
 		return EXT2_ERROR;
 
 	/* inode bitmap 채우기 */
@@ -314,7 +308,7 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 	block[0] = 0xff; // 8개
 	block[1] = 0x03; // 2개  inode 예약 영역 10개 잡아줌
 
-	if (write_block(disk, &sb, block, gd.start_block_of_inode_bitmap) == EXT2_ERROR)
+	if (write_block(disk, block, gd.start_block_of_inode_bitmap) == EXT2_ERROR)
 		return EXT2_ERROR;
 
 	/* inode table 채우기 */
@@ -322,7 +316,7 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 	
 	for (i = gd.start_block_of_inode_table; i < sb.first_meta_bg; i++)
 	{
-		if (write_block(disk, &sb, block, i) == EXT2_ERROR)
+		if (write_block(disk, block, i) == EXT2_ERROR)
 			return EXT2_ERROR;
 	}
 
@@ -335,7 +329,7 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 		ZeroMemory(block, sizeof(block));
 		memcpy(block, &sb, sizeof(sb));
 
-		if (write_block(disk, &sb, block, sb.block_per_group * gi) == EXT2_ERROR)
+		if (write_block(disk, block, sb.block_per_group * gi) == EXT2_ERROR)
 			return EXT2_ERROR;
 
 		/* gi번째 group에 descriptor table 채우기 */
@@ -350,7 +344,7 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 			// 한 block 꽉 차면 다음 block으로 넘어감
 			if ((j + 1) % descriptor_per_block == 0) 
 			{
-				if (write_block(disk, &sb, block, sb.block_per_group * gi + 1 + descriptor_block_index++) == EXT2_ERROR)
+				if (write_block(disk, block, sb.block_per_group * gi + 1 + descriptor_block_index++) == EXT2_ERROR)
 					return EXT2_ERROR;
 				ZeroMemory(block, sizeof(block));
 			}
@@ -358,7 +352,7 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 		// 꽉 채우지 못한 마지막 block 써줌
 		if (number_of_group % descriptor_per_block != 0) 
 		{
-			if (write_block(disk, &sb, block, sb.block_per_group * gi + 1 + descriptor_block_index) == EXT2_ERROR)
+			if (write_block(disk, block, sb.block_per_group * gi + 1 + descriptor_block_index) == EXT2_ERROR)
 				return EXT2_ERROR;
 		}
 
@@ -369,13 +363,13 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 			(((volatile unsigned int *) block)[i >> 5]) |= (1UL << (i & 31));
 		}
 		
-		if (write_block(disk, &sb, block, sb.block_per_group * gi + gd.start_block_of_block_bitmap) == EXT2_ERROR)
+		if (write_block(disk, block, sb.block_per_group * gi + gd.start_block_of_block_bitmap) == EXT2_ERROR)
 			return EXT2_ERROR;
 
 		/* gi번째 group에 inode bitmap 채우기 */
 		ZeroMemory(block, sizeof(block));
 
-		if (write_block(disk, &sb, block, sb.block_per_group * gi + gd.start_block_of_inode_bitmap) == EXT2_ERROR)
+		if (write_block(disk, block, sb.block_per_group * gi + gd.start_block_of_inode_bitmap) == EXT2_ERROR)
 			return EXT2_ERROR;
 
 		/* gi번째 group에 inode table 채우기 */
@@ -383,8 +377,8 @@ int ext2_format(DISK_OPERATIONS* disk, UINT32 log_block_size)
 
 		for (i = sb.block_per_group * gi + gd.start_block_of_inode_table; i < sb.block_per_group * gi + sb.first_meta_bg; i++)
 		{
-			if (write_block(disk, &sb, block, i) == EXT2_ERROR)
-			return EXT2_ERROR;
+			if (write_block(disk, block, i) == EXT2_ERROR)
+				return EXT2_ERROR;
 		}
 
 	}
@@ -543,7 +537,7 @@ int create_root(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK * sb, EXT2_GROUP_DESCRIP
 	root_inode->block_cnt = 1;
 	root_inode->size = MAX_SECTOR_SIZE * SECTOR_PER_BLOCK;
 	root_inode->i_block[0] = root_entry_block;
-	write_block(disk, sb, block, inode_table_block);
+	write_block(disk, block, inode_table_block);
 	//dump_block(disk, sb, inode_table_block);
 
 	// set dir_entry
@@ -558,7 +552,7 @@ int create_root(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK * sb, EXT2_GROUP_DESCRIP
 	FILL_ENTRY(entry, 2, "..", EXT2_FT_DIR);
 	entry->record_len = (1024 << sb->log_block_size) - prev_entry->record_len;
 
-	write_block(disk, sb, block, root_entry_block);
+	write_block(disk, block, root_entry_block);
 
 	return EXT2_SUCCESS;
 }
@@ -1089,14 +1083,8 @@ int ext2_read_superblock(EXT2_FILESYSTEM* fs, EXT2_NODE* root)
 	}
 	
 	/* fs에 0번 block group의 super block, group descriptor table 복사 */
-
-	for (int i = 0; i < SECTOR_PER_BLOCK; i++)
-	{
-		if(fs->disk->read_sector(fs->disk, BOOT_SECTOR_BASE + i, &(block[i * fs->disk->bytes_per_sector]))== EXT2_ERROR) {
-			PRINTF("read_block() function error\n");
-			return EXT2_ERROR;
-		}
-	}
+	if ( read_block(fs->disk, block, 0) == EXT2_ERROR)
+		return EXT2_ERROR;
 
 	memcpy(&fs->sb, block, sizeof(EXT2_SUPER_BLOCK));
 	read_disk_per_block(fs, 0, group_descriptor_block, block);
