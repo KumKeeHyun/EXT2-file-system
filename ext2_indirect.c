@@ -217,7 +217,7 @@ int indirect_lookup_entry(void *_argv)
     BYTE block[MAX_SECTOR_SIZE * SECTOR_PER_BLOCK];
     EXT2_ENTRY_LOCATION loc;
     Argv_Lookup_Entry *argv;
-    
+  
     argv = (Argv_Lookup_Entry *)_argv;
     get_block_location(argv->tag.fs, argv->tag.blk_num, &loc);
     read_disk_per_block(argv->tag.fs, loc.group, loc.block, block);

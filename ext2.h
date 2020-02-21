@@ -163,6 +163,7 @@ int create_root(DISK_OPERATIONS* disk, EXT2_SUPER_BLOCK * sb, EXT2_GROUP_DESCRIP
 int ext2_read_superblock(EXT2_FILESYSTEM* fs, EXT2_NODE* root);
 
 int ext2_create(EXT2_NODE* parent, const char* entryName, EXT2_NODE* retEntry);
+int ext2_remove(EXT2_NODE *file);
 int ext2_read(EXT2_NODE* file, unsigned long offset, unsigned long length, const char* buffer);
 int ext2_write(EXT2_NODE* file, unsigned long offset, unsigned long length, const char* buffer);
 

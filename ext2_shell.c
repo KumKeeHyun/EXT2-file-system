@@ -6,132 +6,6 @@ typedef struct {
 	char * address;
 }DISK_MEMORY;
 
-// void printFromP2P(char * start, char * end);
-
-// int fs_dumpDataSector(DISK_OPERATIONS* disk, int usedSector)
-// {
-// 	char * start;
-// 	char * end;
-
-// 	start = ((DISK_MEMORY *)disk->pdata)->address + usedSector * disk->bytes_per_sector;
-// 	end = start + disk->bytes_per_sector;
-// 	printFromP2P(start, end);
-// 	printf("\n\n");
-
-// 	return EXT2_SUCCESS;
-// }
-
-// void printFromP2P(char * start, char * end)
-// {
-// 	int start_int, end_int;
-// 	start_int = (int)start;
-// 	end_int = (int)end;
-
-// 	printf("start address : %#x , end address : %#x\n\n", start, end - 1);
-// 	start = (char *)(start_int &= ~(0xf));
-// 	end = (char *)(end_int |= 0xf);
-
-// 	while (start <= end)
-// 	{
-// 		if ((start_int & 0xf) == 0)
-// 			fprintf(stdout, "\n%#08x   ", start);
-
-// 		fprintf(stdout, "%02X  ", *(unsigned char *)start);
-// 		start++;
-// 		start_int++;
-// 	}
-// 	printf("\n\n");
-
-// }
-// void fs_dumpDataPart(DISK_OPERATIONS * disk, SHELL_FS_OPERATIONS * fsOprs, const SHELL_ENTRY * parent, SHELL_ENTRY * entry, const char * name)
-// {
-// 	EXT2_NODE EXT2Parent;
-// 	EXT2_NODE EXT2Entry;
-// 	INODE node;
-// 	int result;
-// 	char * start, *end;
-
-// 	shell_entry_to_ext2_entry(parent, &EXT2Parent);
-// 	if (result = ext2_lookup(&EXT2Parent, name, &EXT2Entry)) return result;
-
-// 	get_inode(EXT2Entry.fs, EXT2Entry.entry.inode, &node);
-
-// 	start = ((DISK_MEMORY *)disk->pdata)->address + (1 + node.i_block[0]) * disk->bytes_per_sector;
-// 	end = start + disk->bytes_per_sector;
-// 	printFromP2P(start, end);
-// }
-// void fs_dumpfileinode(DISK_OPERATIONS * disk, SHELL_FS_OPERATIONS * fsOprs, const SHELL_ENTRY * parent, SHELL_ENTRY * entry, const char * name)
-// {
-// 	EXT2_NODE EXT2Parent;
-// 	EXT2_NODE EXT2Entry;
-// 	INODE node;
-// 	int result, inode, i;
-
-
-// 	shell_entry_to_ext2_entry(parent, &EXT2Parent);
-// 	if (result = ext2_lookup(&EXT2Parent, name, &EXT2Entry)) return result;
-
-// 	get_inode(EXT2Entry.fs, EXT2Entry.entry.inode, &node);
-// 	inode = EXT2Entry.entry.inode;
-
-// 	printf("inode number : %d\n", inode);
-// 	for (i = 0; i < EXT2_N_BLOCKS; i++) {
-// 		printf("iblock[%.2d] : %u\n", i, node.i_block[i]);
-// 	}
-
-// }
-// void fs_dumpDataBlockByNum(DISK_OPERATIONS * disk, SHELL_FS_OPERATIONS * fsOprs, const SHELL_ENTRY * parent, SHELL_ENTRY * entry, int num)
-// {
-// 	char * start, *end;
-
-// 	start = ((DISK_MEMORY *)disk->pdata)->address + (num) * disk->bytes_per_sector * ((EXT2_FILESYSTEM *)fsOprs->pdata)->sb.sector_per_block + 1024;
-// 	end = start + disk->bytes_per_sector * ((EXT2_FILESYSTEM *)fsOprs->pdata)->sb.sector_per_block;
-// 	printFromP2P(start, end);
-
-// }
-
-// void dump_block(DISK_OPERATIONS * disk, EXT2_SUPER_BLOCK *sb, int num)
-// {
-// 	char * start, *end;
-// 	printf("%#x, %d\n", ((DISK_MEMORY *)disk->pdata)->address, num);
-// 	start = ((DISK_MEMORY *)disk->pdata)->address + (num) * disk->bytes_per_sector * sb->sector_per_block + 1024;
-// 	end = start + disk->bytes_per_sector * sb->sector_per_block;
-// 	//start = (char *)disk->pdata + (num * 1024) + 1024;
-// 	//end = start + 1024;
-// 	printFromP2P(start, end);
-// }
-
-// void printf_by_sel(DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, const SHELL_ENTRY* parent, SHELL_ENTRY* entry, const char* name, int sel, int num)
-// {
-// 	switch (sel) {
-// 	case 1:
-// 		fs_dumpDataSector(disk, 1);
-// 		break;
-// 	case 2:
-// 		fs_dumpDataSector(disk, 2);
-// 		break;
-// 	case 3:
-// 		fs_dumpDataSector(disk, 3);
-// 		break;
-// 	case 4:
-// 		fs_dumpDataSector(disk, 4);
-// 		break;
-// 	case 5:
-// 		fs_dumpDataSector(disk, 5);
-// 		fs_dumpDataSector(disk, 6);
-// 		break;
-// 	case 6:
-// 		fs_dumpDataPart(disk, fsOprs, parent, entry, name);
-// 		break;
-// 	case 7:
-// 		fs_dumpfileinode(disk, fsOprs, parent, entry, name);
-// 		break;
-// 	case 8:
-// 		fs_dumpDataBlockByNum(disk, fsOprs, parent, entry, num);
-// 		break;
-// 	}
-// }
-
 int fs_format(DISK_OPERATIONS* disk, void* param)
 {
 	printf("formatting as a %s\n", (char *)param);
@@ -342,27 +216,6 @@ int fs_read_dir(DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, const SHELL_
 	return EXT2_SUCCESS;
 }
 
-// int my_strnicmp(const char* str1, const char* str2, int length)
-// {
-// 	char   c1, c2;
-
-// 	while (((*str1 && *str1 != 0x20) || (*str2 && *str2 != 0x20)) && length-- > 0)
-// 	{
-// 		c1 = toupper(*str1);
-// 		c2 = toupper(*str2);
-
-// 		if (c1 > c2)
-// 			return -1;
-// 		else if (c1 < c2)
-// 			return 1;
-
-// 		str1++;
-// 		str2++;
-// 	}
-
-// 	return 0;
-// }
-
 int fs_stat( DISK_OPERATIONS* disk, struct SHELL_FS_OPERATIONS* fsOprs, unsigned int* total_sectors, unsigned int* used_sectors)
 {
 	EXT2_NODE entry;
@@ -408,7 +261,6 @@ int fs_mkdir(DISK_OPERATIONS* disk, SHELL_FS_OPERATIONS* fsOprs, const SHELL_ENT
 		printf("error : %s already exist\n", name);
 		return EXT2_ERROR;
 	}
-		
 
 	shell_entry_to_ext2_entry(parent, &EXT2_Parent);
 
