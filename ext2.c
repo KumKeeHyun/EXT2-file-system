@@ -933,7 +933,7 @@ int ext2_create(EXT2_NODE* parent, const char* entryName, EXT2_NODE* retEntry)
 	int result;
 	BYTE name_length;
 	
-	if ((parent->fs->gd.free_inodes_count) == 0) return EXT2_ERROR;
+	// if ((parent->fs->gd.free_inodes_count) == 0) return EXT2_ERROR;
 	if (format_name(parent->fs, entryName) == EXT2_ERROR) return EXT2_ERROR;
 
 	ZeroMemory(retEntry, sizeof(EXT2_NODE));
